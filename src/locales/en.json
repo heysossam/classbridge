@@ -28,7 +28,7 @@
   },
   "studentJoin": {
     "title": "Join ClassBridge Room",
-    "instructions": "Enter the participant code and English nickname provided by your teacher.",
+    "instructions": "Enter your participant code and English nickname. Your partner class is automatically identified from your code.",
     "roomCode": "Room Code",
     "roomCodePlaceholder": "e.g., BRIDGE2026",
     "participantCode": "Random Participant Code",

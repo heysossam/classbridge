@@ -21,7 +21,9 @@ export const StudentActivityList: React.FC<StudentActivityListProps> = ({
   onBack,
 }) => {
   const t = (key: string) => getTranslation(currentLang, key);
-  const activities = dataService.getActivities();
+  const activities = dataService.getActivities().filter(
+    act => act.targetSide === 'Both' || act.targetSide === student.partnerSide
+  );
   const submissions = dataService.getSubmissions();
 
   const getTypeBadge = (type: Activity['type']) => {

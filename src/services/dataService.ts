@@ -52,12 +52,29 @@ class DataService {
     }
 
     const students = this.getStudents();
+    const cleanNick = englishNickname.trim().toLowerCase();
+    const cleanCode = participantCode.trim().toUpperCase();
+
     const found = students.find(
-      s => s.englishNickname.trim().toLowerCase() === englishNickname.trim().toLowerCase() &&
-           s.participantCode.trim().toUpperCase() === participantCode.trim().toUpperCase()
+      s => s.englishNickname.trim().toLowerCase() === cleanNick &&
+           s.participantCode.trim().toUpperCase() === cleanCode
     );
 
-    return found || null;
+    if (!found) {
+      return null;
+    }
+
+    // Automatically infer partnerSide from registered whitelist and participant code prefix
+    // (K-prefix: Korea Class, T-prefix: Taiwan Class)
+    const partnerSide: 'Korea Class' | 'Taiwan Class' = 
+      cleanCode.startsWith('K') ? 'Korea Class' :
+      cleanCode.startsWith('T') ? 'Taiwan Class' :
+      found.partnerSide;
+
+    return {
+      ...found,
+      partnerSide
+    };
   }
 
   public verifyTeacherCode(code: string): 'Korea Class' | 'Taiwan Class' | null {

@@ -28,7 +28,7 @@
   },
   "studentJoin": {
     "title": "학생 교류방 입장",
-    "instructions": "선생님이 안내해 주신 참여코드와 영어 이름을 입력하세요.",
+    "instructions": "선생님이 안내해 주신 참여코드와 영어 이름을 입력하세요. 소속 학급은 참여코드를 통해 자동으로 판별됩니다.",
     "roomCode": "교류방 코드",
     "roomCodePlaceholder": "예: BRIDGE2026",
     "participantCode": "무작위 개인 참여코드",

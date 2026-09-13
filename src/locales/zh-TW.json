@@ -28,7 +28,7 @@
   },
   "studentJoin": {
     "title": "學生交流室進入",
-    "instructions": "請輸入教師提供的個人參與代碼與英文暱稱。",
+    "instructions": "請輸入教師提供的個人參與代碼與英文暱稱，系統將依代碼自動判別所屬班級。",
     "roomCode": "交流室代碼",
     "roomCodePlaceholder": "例如：BRIDGE2026",
     "participantCode": "隨機個人參與代碼",

@@ -103,35 +103,35 @@ export const StudentJoin: React.FC<StudentJoinProps> = ({
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
             <button
               type="button"
-              className="badge badge-accent"
+              className="badge badge-neutral"
               onClick={() => handleQuickPreset('K7M4', 'Sunny')}
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: 'pointer', padding: '6px 10px' }}
             >
-              🇰🇷 Sunny (K7M4)
+              Sunny (K7M4)
             </button>
             <button
               type="button"
               className="badge badge-neutral"
               onClick={() => handleQuickPreset('K2R7', 'Leo')}
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: 'pointer', padding: '6px 10px' }}
             >
-              🇰🇷 Leo (K2R7)
+              Leo (K2R7)
             </button>
             <button
               type="button"
-              className="badge badge-accent"
+              className="badge badge-neutral"
               onClick={() => handleQuickPreset('T7A4', 'Alice')}
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: 'pointer', padding: '6px 10px' }}
             >
-              🇹🇼 Alice (T7A4)
+              Alice (T7A4)
             </button>
             <button
               type="button"
               className="badge badge-neutral"
               onClick={() => handleQuickPreset('T2K8', 'Kevin')}
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: 'pointer', padding: '6px 10px' }}
             >
-              🇹🇼 Kevin (T2K8)
+              Kevin (T2K8)
             </button>
           </div>
         </div>
@@ -241,10 +241,10 @@ export const StudentJoin: React.FC<StudentJoinProps> = ({
           <ShieldCheck size={14} />
           <span>
             {currentLang === 'ko' 
-              ? '본 인증은 LocalStorage 시연용 화이트리스트 접근 제한으로 구동됩니다.' 
+              ? '참여코드 확인 후 소속 학급이 자동으로 배정됩니다.' 
               : currentLang === 'zh-TW' 
-              ? '本認證由 LocalStorage 示範白名單權限限制驅動。' 
-              : 'Authentication secured via LocalStorage demo whitelist access restriction.'}
+              ? '驗證代碼後將自動判別所屬班級。' 
+              : 'Class is automatically identified upon participant code verification.'}
           </span>
         </div>
       </div>
