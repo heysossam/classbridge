@@ -1,0 +1,90 @@
+{
+  "app": {
+    "title": "教室相連",
+    "subTitle": "ClassBridge",
+    "tagline": "Two classrooms, one shared journey.",
+    "privacyNotice": "注意事項：系統不會蒐集或儲存學生的真實姓名、學校名稱、座號或相片等個人資訊。",
+    "adminLink": "服務管理員"
+  },
+  "roles": {
+    "teacher": "教師儀表板",
+    "teacherDesc": "掌握跨國非同步進度，管理歷程導向評量參考紀錄",
+    "student": "學生交流室進入",
+    "studentDesc": "使用專屬代碼與英文暱稱安全參與文化任務",
+    "admin": "系統管理員"
+  },
+  "status": {
+    "not_started": "未開始",
+    "in_progress": "進行中",
+    "completed": "已完成"
+  },
+  "start": {
+    "welcome": "臺灣與韓國跨國非同步共同教學交流平台",
+    "selectRole": "請選擇身分以進入平台",
+    "teacherBtn": "教師登入 / 示範入口",
+    "studentBtn": "學生身分進入"
+  },
+  "studentJoin": {
+    "title": "進入 ClassBridge 交流室",
+    "instructions": "請輸入老師提供的參與代碼與專屬英文暱稱。",
+    "roomCode": "交流室代碼",
+    "roomCodePlaceholder": "例如：BRIDGE2026",
+    "participantCode": "隨機個人代碼",
+    "participantCodePlaceholder": "例如：K7M4 或 T9Q2",
+    "englishNickname": "平台專用英文暱稱",
+    "englishNicknamePlaceholder": "例如：Sunny, Leo, Mina",
+    "selectSide": "選擇所屬班級",
+    "koreaClass": "Korea Class (韓國班級)",
+    "taiwanClass": "Taiwan Class (臺灣班級)",
+    "warning": "提醒：請勿輸入真實中文姓名或學校名稱。個人專屬代碼切勿透露給他人。",
+    "enterBtn": "開始參與活動"
+  },
+  "studentActivity": {
+    "currentMission": "共同文化交流活動",
+    "title": "Choose Your Favorite Keyring Design",
+    "desc": "請票選臺韓班級共同製作的紀念鑰匙圈設計，並使用英文表達您的想法與原因！",
+    "step1": "1. 選擇您喜愛的設計",
+    "step2": "2. 點擊英文句型框架以填寫原因",
+    "step3": "3. 提交您的寶貴意見",
+    "reasonLabel": "我的選擇原因 (請以英文填寫)",
+    "reasonPlaceholder": "點選句型框架並完成空格...",
+    "submitBtn": "提交我的意見",
+    "submittedTitle": "已成功提交意見！",
+    "submittedDesc": "快來看看夥伴班級同學的票選結果與公開分享的意見吧。",
+    "totalVotes": "兩國班級偏好票選總計",
+    "publicComments": "同學的公開意見分享",
+    "yourVote": "我的選擇"
+  },
+  "teacher": {
+    "dashboardTitle": "跨國共同教學教師進度看板",
+    "roomTitle": "Korea–Taiwan Culture Box Exchange",
+    "overallProgress": "專案整體進度",
+    "nextSchedule": "下一個共同日程",
+    "statusControl": "更新我方班級進行狀態",
+    "currentActivity": "目前進行中共同任務",
+    "participationSummary": "學生參與及提交概況",
+    "totalStudents": "全體登記學生數",
+    "submittedCount": "已提交",
+    "unsubmittedCount": "未提交",
+    "unsubmittedCodes": "未提交學生代碼",
+    "viewStudentDetail": "檢視學生表現與評量",
+    "privateNote": "教師私人保密評量備忘錄",
+    "saveNote": "儲存備忘錄",
+    "noteSaved": "已儲存！",
+    "evalTitle": "歷程導向評量參考評語",
+    "evalNotice": "教師必須根據學生的實際表現審閱與修正後，方可作為正式評量參考。",
+    "copyEval": "複製參考評語",
+    "evalCopied": "已複製到剪貼簿！",
+    "close": "關閉",
+    "switchSideKorea": "Korea Class 教師視角",
+    "switchSideTaiwan": "Taiwan Class 教師視角"
+  },
+  "admin": {
+    "title": "極簡管理員控制台",
+    "notice": "此控制台僅供系統維運人員使用，一般使用者無法查看。",
+    "roomList": "活躍交流室列表",
+    "statusToggle": "啟用/停用交流室",
+    "resetDemo": "重設示範資料",
+    "resetConfirm": "確定要將所有學生提交記錄還原為預設示範狀態嗎？"
+  }
+}

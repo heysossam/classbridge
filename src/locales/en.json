@@ -1,0 +1,90 @@
+{
+  "app": {
+    "title": "ClassBridge",
+    "subTitle": "교실잇다",
+    "tagline": "Two classrooms, one shared journey.",
+    "privacyNotice": "Notice: Real student names, school names, student IDs, and photos are neither collected nor stored.",
+    "adminLink": "Service Admin"
+  },
+  "roles": {
+    "teacher": "Teacher Dashboard",
+    "teacherDesc": "Check asynchronous progress and manage process-based assessment records",
+    "student": "Student Exchange Room",
+    "studentDesc": "Safely participate in cultural missions with code and English nickname",
+    "admin": "System Administrator"
+  },
+  "status": {
+    "not_started": "Not Started",
+    "in_progress": "In Progress",
+    "completed": "Completed"
+  },
+  "start": {
+    "welcome": "Asynchronous International Classroom Exchange between Korea & Taiwan",
+    "selectRole": "Please select your role to enter",
+    "teacherBtn": "Teacher Login / Demo",
+    "studentBtn": "Join as Student"
+  },
+  "studentJoin": {
+    "title": "Join ClassBridge Room",
+    "instructions": "Enter the participant code and English nickname provided by your teacher.",
+    "roomCode": "Room Code",
+    "roomCodePlaceholder": "e.g., BRIDGE2026",
+    "participantCode": "Random Participant Code",
+    "participantCodePlaceholder": "e.g., K7M4 or T9Q2",
+    "englishNickname": "App-exclusive English Nickname",
+    "englishNicknamePlaceholder": "e.g., Sunny, Leo, Mina",
+    "selectSide": "Select Your Class",
+    "koreaClass": "Korea Class",
+    "taiwanClass": "Taiwan Class",
+    "warning": "Warning: Do not enter your real name or school name. Never share your private code with others.",
+    "enterBtn": "Start Activity"
+  },
+  "studentActivity": {
+    "currentMission": "Joint Cultural Mission",
+    "title": "Choose Your Favorite Keyring Design",
+    "desc": "Vote for the commemorative keyring design created by both classes and express your reasons in English!",
+    "step1": "1. Select your favorite design",
+    "step2": "2. Click a sentence frame to write your reason",
+    "step3": "3. Submit your response",
+    "reasonLabel": "Your Reason (in English)",
+    "reasonPlaceholder": "Select a sentence frame and complete the blank...",
+    "submitBtn": "Submit My Opinion",
+    "submittedTitle": "Submission Completed Successfully!",
+    "submittedDesc": "Explore the voting results and public comments from partner students.",
+    "totalVotes": "Total Preference Votes",
+    "publicComments": "Friends' Public Comments",
+    "yourVote": "Your Choice"
+  },
+  "teacher": {
+    "dashboardTitle": "International Exchange Teacher Board",
+    "roomTitle": "Korea–Taiwan Culture Box Exchange",
+    "overallProgress": "Overall Project Progress",
+    "nextSchedule": "Next Joint Schedule",
+    "statusControl": "Update My Class Status",
+    "currentActivity": "Current Joint Activity",
+    "participationSummary": "Participation & Submission Status",
+    "totalStudents": "Total Registered Students",
+    "submittedCount": "Submitted",
+    "unsubmittedCount": "Unsubmitted",
+    "unsubmittedCodes": "Unsubmitted Codes",
+    "viewStudentDetail": "View Evidence & Assessment",
+    "privateNote": "Teacher's Confidential Assessment Note",
+    "saveNote": "Save Note",
+    "noteSaved": "Saved successfully!",
+    "evalTitle": "Process-based Assessment Reference Statement",
+    "evalNotice": "The teacher must review and revise this statement based on actual student performance before using it in evaluations.",
+    "copyEval": "Copy Statement",
+    "evalCopied": "Copied to clipboard!",
+    "close": "Close",
+    "switchSideKorea": "Korea Class Teacher View",
+    "switchSideTaiwan": "Taiwan Class Teacher View"
+  },
+  "admin": {
+    "title": "Minimal Admin Console",
+    "notice": "This console is for service administrators only and is not visible to general users.",
+    "roomList": "Active Rooms",
+    "statusToggle": "Toggle Room Status",
+    "resetDemo": "Reset Demo Data",
+    "resetConfirm": "Are you sure you want to reset all student responses to initial demo state?"
+  }
+}

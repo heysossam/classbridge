@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default Deny All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && (request.auth.token.role == 'teacher' || request.auth.token.firebase.sign_in_provider == 'google.com');
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.role == 'admin';
+    }
+
+    // Rooms Collection
+    match /rooms/{roomId} {
+      // Anyone participating can read room info
+      allow read: if isAuthenticated();
+      // Only teachers or admins can update status
+      allow write: if isTeacher() || isAdmin();
+    }
+
+    // Activities Collection
+    match /activities/{activityId} {
+      allow read: if isAuthenticated();
+      allow write: if isTeacher() || isAdmin();
+    }
+
+    // Student Memberships (Anonymous or Registered)
+    match /studentMemberships/{membershipId} {
+      allow read: if isAuthenticated();
+      // Student can register their anonymous session, teachers can manage
+      allow create: if isAuthenticated();
+      allow update, delete: if isTeacher() || isAdmin();
+    }
+
+    // Student Responses (Publicly visible within room, but only author can edit)
+    match /responses/{responseId} {
+      // Public responses are viewable by participants in the same room
+      allow read: if isAuthenticated() && (resource.data.visibilityStatus == 'public' || isTeacher());
+      
+      // Only author can create or update their own response
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.authorUid || isTeacher());
+      allow delete: if isTeacher() || isAdmin();
+    }
+
+    // Teacher Private Notes (STRICT PRIVACY: NEVER ACCESSIBLE BY STUDENTS)
+    match /teacherPrivateNotes/{noteId} {
+      // Only teachers and admins have read/write access
+      allow read, write: if isTeacher() || isAdmin();
+    }
+  }
+}
