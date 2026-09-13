@@ -4,7 +4,7 @@ import {
   ArrowRight, AlertCircle, ArrowLeft, Calendar
 } from 'lucide-react';
 import { Language, StudentMembership, Activity } from '../../types';
-import { getTranslation } from '../../services/i18n';
+import { getTranslation, getLocalizedActivityContent } from '../../services/i18n';
 import { dataService } from '../../services/dataService';
 
 interface StudentActivityListProps {
@@ -29,28 +29,22 @@ export const StudentActivityList: React.FC<StudentActivityListProps> = ({
       case 'writing':
         return (
           <span className="badge badge-neutral" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-            <FileText size={13} /> {currentLang === 'ko' ? '글쓰기' : currentLang === 'zh-TW' ? '寫作任務' : 'Writing'}
+            <FileText size={13} /> {t('activity.typeWriting')}
           </span>
         );
       case 'poll':
         return (
           <span className="badge badge-accent" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-            <BarChart2 size={13} /> {currentLang === 'ko' ? '투표' : currentLang === 'zh-TW' ? '偏好票選' : 'Poll'}
+            <BarChart2 size={13} /> {t('activity.typePoll')}
           </span>
         );
       case 'qa':
         return (
           <span className="badge badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-            <MessageCircleQuestion size={13} /> {currentLang === 'ko' ? '질문·답변' : currentLang === 'zh-TW' ? '問答互動' : 'Q&A'}
+            <MessageCircleQuestion size={13} /> {t('activity.typeQA')}
           </span>
         );
     }
-  };
-
-  const getInstructions = (act: Activity) => {
-    if (currentLang === 'zh-TW' && act.instructionsZh) return act.instructionsZh;
-    if (currentLang === 'en' && act.instructionsEn) return act.instructionsEn;
-    return act.instructionsKo || act.instructionsEn;
   };
 
   return (
@@ -72,7 +66,7 @@ export const StudentActivityList: React.FC<StudentActivityListProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button onClick={onBack} className="btn-outline" style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <ArrowLeft size={16} />
-            <span>{currentLang === 'ko' ? '나가기' : 'Exit'}</span>
+            <span>{currentLang === 'ko' ? '나가기' : currentLang === 'zh-TW' ? '離開' : 'Exit'}</span>
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontWeight: 800, color: 'var(--color-primary)', fontSize: '1.15rem' }}>
@@ -94,7 +88,7 @@ export const StudentActivityList: React.FC<StudentActivityListProps> = ({
           {currentLang === 'ko' ? '나의 국제공동수업 활동' : currentLang === 'zh-TW' ? '我的跨國共同教學任務' : 'My Joint Class Activities'}
         </h1>
         <p style={{ color: 'var(--color-text-muted)', fontSize: '0.95rem' }}>
-          {currentLang === 'ko' ? '한국과 대만 친구들이 함께하는 과제를 확인하고 차례대로 참여해 보세요.' : 'Explore joint assignments and share your thoughts with your partner classroom.'}
+          {currentLang === 'ko' ? '한국과 대만 친구들이 함께하는 과제를 확인하고 차례대로 참여해 보세요.' : currentLang === 'zh-TW' ? '檢視臺韓同學共同參與的任務並依序完成。' : 'Explore joint assignments and share your thoughts with your partner classroom.'}
         </p>
       </div>
 
@@ -106,6 +100,7 @@ export const StudentActivityList: React.FC<StudentActivityListProps> = ({
           );
           const isCompleted = mySubmissions.length > 0;
           const isClosed = act.status === 'closed';
+          const localized = getLocalizedActivityContent(act, currentLang);
 
           return (
             <div 
@@ -126,36 +121,44 @@ export const StudentActivityList: React.FC<StudentActivityListProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
                   {getTypeBadge(act.type)}
                   <span className={`badge ${act.isRequired ? 'badge-accent' : 'badge-neutral'}`} style={{ fontSize: '0.72rem' }}>
-                    {act.isRequired ? (currentLang === 'ko' ? '필수 과제' : 'Required') : (currentLang === 'ko' ? '선택 과제' : 'Optional')}
+                    {act.isRequired ? (currentLang === 'ko' ? '필수 과제' : currentLang === 'zh-TW' ? '必修任務' : 'Required') : (currentLang === 'ko' ? '선택 과제' : currentLang === 'zh-TW' ? '選修任務' : 'Optional')}
                   </span>
                   {isCompleted ? (
                     <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>
-                      <CheckCircle2 size={12} /> {currentLang === 'ko' ? '제출 완료' : 'Completed'} ({mySubmissions.length}개)
+                      <CheckCircle2 size={12} /> {currentLang === 'ko' ? '제출 완료' : currentLang === 'zh-TW' ? '已完成' : 'Completed'} ({mySubmissions.length})
                     </span>
                   ) : isClosed ? (
                     <span className="badge badge-neutral" style={{ fontSize: '0.72rem' }}>
-                      {currentLang === 'ko' ? '마감됨' : 'Closed'}
+                      {currentLang === 'ko' ? '마감됨' : currentLang === 'zh-TW' ? '已截止' : 'Closed'}
                     </span>
                   ) : (
                     <span className="badge badge-warning" style={{ fontSize: '0.72rem' }}>
-                      <Clock size={12} /> {currentLang === 'ko' ? '미완료' : 'Pending'}
+                      <Clock size={12} /> {currentLang === 'ko' ? '미완료' : currentLang === 'zh-TW' ? '未完成' : 'Pending'}
+                    </span>
+                  )}
+
+                  {localized.fallbackNotice && (
+                    <span className="badge badge-warning" style={{ fontSize: '0.68rem' }}>
+                      {localized.fallbackNotice}
                     </span>
                   )}
                 </div>
 
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '6px' }}>
-                  {act.title}
+                  {localized.title}
                 </h3>
 
                 <p style={{ fontSize: '0.88rem', color: 'var(--color-text-muted)', lineHeight: 1.45, marginBottom: '10px' }}>
-                  {getInstructions(act)}
+                  {localized.instructions}
                 </p>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '0.78rem', color: 'var(--color-text-light)' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <Calendar size={13} /> {act.startDate} ~ {act.dueDate}
                   </span>
-                  <span>1인 최대 {act.submissionLimit}개 제출</span>
+                  <span>
+                    {currentLang === 'ko' ? `1인 최대 ${act.submissionLimit}개 제출` : currentLang === 'zh-TW' ? `每人最多提交 ${act.submissionLimit} 篇` : `Max ${act.submissionLimit} submission per student`}
+                  </span>
                 </div>
               </div>
 
@@ -164,7 +167,11 @@ export const StudentActivityList: React.FC<StudentActivityListProps> = ({
                   className={isCompleted ? 'btn-secondary' : 'btn-accent'}
                   style={{ padding: '10px 18px', fontSize: '0.88rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                 >
-                  <span>{isCompleted ? (currentLang === 'ko' ? '내용 확인 / 이어하기' : 'View & Continue') : (currentLang === 'ko' ? '과제 시작하기' : 'Start Activity')}</span>
+                  <span>
+                    {isCompleted 
+                      ? (currentLang === 'ko' ? '내용 확인 / 이어하기' : currentLang === 'zh-TW' ? '檢視內容 / 繼續進行' : 'View & Continue') 
+                      : (currentLang === 'ko' ? '과제 시작하기' : currentLang === 'zh-TW' ? '開始任務' : 'Start Activity')}
+                  </span>
                   <ArrowRight size={16} />
                 </button>
               </div>

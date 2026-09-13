@@ -22,12 +22,17 @@ export interface PollOption {
   id: string;
   text: string;
   targetSide?: 'Korea Class' | 'Taiwan Class' | 'Both';
+  imageUrl?: string;
+  imageLabel?: string;
 }
 
 export interface Activity {
   id: string;
   roomId: string;
   title: string;
+  titleKo?: string;
+  titleEn?: string;
+  titleZh?: string;
   type: ActivityType;
   instructionsKo: string;
   instructionsEn: string;
@@ -156,4 +161,36 @@ export interface ComprehensiveStudentEvidence {
   likesGivenCount: number;
   likesReceivedCount: number;
   teacherNote?: TeacherPrivateNote;
+}
+
+export interface ActivitySummaryStats {
+  activity: Activity;
+  targetCount: number;
+  submittedCount: number;
+  unsubmittedCount: number;
+  koreaSubmissionsCount: number;
+  taiwanSubmissionsCount: number;
+  commentsCount: number;
+  likesCount: number;
+}
+
+export interface StudentPortfolioRecord {
+  activity: Activity;
+  isCompleted: boolean;
+  submission?: Submission;
+  studentComments: Comment[];
+  likesReceived: number;
+  teacherNote?: TeacherPrivateNote;
+}
+
+export interface StudentPortfolioData {
+  student: StudentMembership;
+  totalAssigned: number;
+  completedCount: number;
+  incompleteCount: number;
+  questionsCount: number;
+  answersCount: number;
+  commentsCount: number;
+  likesReceivedCount: number;
+  records: StudentPortfolioRecord[];
 }

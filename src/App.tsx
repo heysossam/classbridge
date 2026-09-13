@@ -24,14 +24,26 @@ export default function App() {
   const searchParams = new URLSearchParams(window.location.search);
   const initialLang = (searchParams.get('lang') as Language) || 'ko';
   
-  // Direct URL admin access attempt detection
+  // Direct URL admin & teacher dashboard access defense
+  // NOTE: In this LocalStorage MVP, client-side route guards prevent students and unauthorized users
+  // from directly entering teacher dashboards or admin screens via URL parameter manipulation (?view=...).
+  // True server-side security authorization will be enforced upon Firebase integration via
+  // Firebase Authentication (Custom Claims) and Firestore Security Rules.
   const requestedViewParam = searchParams.get('view');
   const isDirectAdminAccess = requestedViewParam === 'admin';
-  const initialView: AppView = isDirectAdminAccess ? 'start' : ((requestedViewParam as AppView) || 'start');
+  const isDirectTeacherAccess = requestedViewParam === 'teacher_dashboard';
+
+  // If directly requesting teacher_dashboard without prior authentication, route to teacher_login
+  const initialView: AppView = isDirectAdminAccess 
+    ? 'start' 
+    : isDirectTeacherAccess 
+    ? 'teacher_login' 
+    : ((requestedViewParam as AppView) || 'start');
 
   const [currentLang, setCurrentLang] = useState<Language>(initialLang);
   const [currentView, setCurrentView] = useState<AppView>(initialView);
   const [showAdminRestrictedModal, setShowAdminRestrictedModal] = useState<boolean>(isDirectAdminAccess);
+  const [isTeacherAuthenticated, setIsTeacherAuthenticated] = useState<boolean>(false);
 
   // Student Session
   const studentCodeParam = searchParams.get('code') || 'K7M4';
@@ -48,21 +60,24 @@ export default function App() {
 
   // Handle direct URL admin attempt cleanup
   useEffect(() => {
-    if (isDirectAdminAccess) {
+    if (isDirectAdminAccess || isDirectTeacherAccess) {
       const url = new URL(window.location.href);
-      url.searchParams.delete('view');
+      if (isDirectAdminAccess) url.searchParams.delete('view');
+      if (isDirectTeacherAccess) url.searchParams.set('view', 'teacher_login');
       window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
     }
-  }, [isDirectAdminAccess]);
+  }, [isDirectAdminAccess, isDirectTeacherAccess]);
 
-  // Route guard: Prevent any unauthorized access to admin screen
-  // TODO: Firebase 연결 후에는 Google Authentication으로 로그인한 사용자 중 지정된 관리자 UID만 관리자 화면에 접근하도록 인가 로직 연동
+  // Route guard: Prevent any unauthorized access to admin or unauthenticated teacher dashboard
   useEffect(() => {
     if (currentView === 'admin') {
       setCurrentView('start');
       setShowAdminRestrictedModal(true);
+    } else if (currentView === 'teacher_dashboard' && !isTeacherAuthenticated) {
+      // Screen-level block: Redirect unauthenticated teacher dashboard access to login
+      setCurrentView('teacher_login');
     }
-  }, [currentView]);
+  }, [currentView, isTeacherAuthenticated]);
 
   // Sync initial view when direct student URL params are used
   useEffect(() => {
@@ -100,11 +115,13 @@ export default function App() {
   };
 
   const handleTeacherLoginSuccess = (side: 'Korea Class' | 'Taiwan Class') => {
+    setIsTeacherAuthenticated(true);
     setTeacherSide(side);
     setCurrentView('teacher_dashboard');
   };
 
   const handleExitToStart = () => {
+    setIsTeacherAuthenticated(false);
     setCurrentView('start');
   };
 

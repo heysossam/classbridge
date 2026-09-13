@@ -1,6 +1,7 @@
 import { 
   Room, Activity, StudentMembership, Submission, Comment, TeacherPrivateNote, 
-  ProgressStatus, ComprehensiveStudentEvidence, ActivityStatus 
+  ProgressStatus, ComprehensiveStudentEvidence, ActivityStatus,
+  ActivitySummaryStats, StudentPortfolioRecord, StudentPortfolioData
 } from '../types';
 import { 
   ROOM_CODE, TEACHER_CODES, initialRoom, initialStudents, 
@@ -20,7 +21,13 @@ class DataService {
   private getStorage<T>(key: string, fallback: T): T {
     try {
       const item = localStorage.getItem(key);
-      return item ? JSON.parse(item) : JSON.parse(JSON.stringify(fallback));
+      if (item !== null) {
+        return JSON.parse(item);
+      }
+      // First boot only: seed demo data to LocalStorage so future runs use persisted store
+      const cloned = JSON.parse(JSON.stringify(fallback));
+      localStorage.setItem(key, JSON.stringify(cloned));
+      return cloned;
     } catch {
       return JSON.parse(JSON.stringify(fallback));
     }
@@ -145,6 +152,156 @@ class DataService {
 
   public updateActivityStatus(id: string, status: ActivityStatus): void {
     this.updateActivity(id, { status });
+  }
+
+  public archiveActivity(id: string): Activity | null {
+    return this.updateActivity(id, { status: 'archived' });
+  }
+
+  public restoreActivity(id: string): Activity | null {
+    return this.updateActivity(id, { status: 'published' });
+  }
+
+  public canDeleteActivity(id: string): { canDelete: boolean; reason: string } {
+    const act = this.getActivityById(id);
+    if (!act) {
+      return { canDelete: false, reason: '존재하지 않는 활동입니다.' };
+    }
+    // Condition 1: Must be draft status
+    if (act.status !== 'draft') {
+      return { 
+        canDelete: false, 
+        reason: '학생 수행 기록이 있는 활동은 삭제할 수 없습니다. 평가 근거 보존을 위해 활동을 보관해 주세요.' 
+      };
+    }
+    // Condition 2: 0 student submissions
+    const subs = this.getSubmissions(id);
+    if (subs.length > 0) {
+      return { 
+        canDelete: false, 
+        reason: '학생 수행 기록이 있는 활동은 삭제할 수 없습니다. 평가 근거 보존을 위해 활동을 보관해 주세요.' 
+      };
+    }
+    // Condition 3: 0 comments
+    const allComments = this.getComments();
+    const relatedComments = allComments.filter(c => c.activityId === id);
+    if (relatedComments.length > 0) {
+      return { 
+        canDelete: false, 
+        reason: '학생 수행 기록이 있는 활동은 삭제할 수 없습니다. 평가 근거 보존을 위해 활동을 보관해 주세요.' 
+      };
+    }
+    // Condition 4: Poll choices / QA submissions are covered under subs.length === 0
+    return { canDelete: true, reason: '' };
+  }
+
+  public deleteActivityPermanently(id: string): { success: boolean; message: string } {
+    const check = this.canDeleteActivity(id);
+    if (!check.canDelete) {
+      return { 
+        success: false, 
+        message: check.reason || '학생 수행 기록이 있는 활동은 삭제할 수 없습니다. 평가 근거 보존을 위해 활동을 보관해 주세요.' 
+      };
+    }
+    const activities = this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities);
+    const filtered = activities.filter(a => a.id !== id);
+    this.setStorage(KEYS.ACTIVITIES, filtered);
+    return { success: true, message: '활동이 영구 삭제되었습니다.' };
+  }
+
+  public getActivitySummary(activityId: string): ActivitySummaryStats | null {
+    const act = this.getActivityById(activityId);
+    if (!act) return null;
+
+    const allStudents = this.getStudents();
+    const targetStudents = act.targetSide === 'Both' 
+      ? allStudents 
+      : allStudents.filter(s => s.partnerSide === act.targetSide);
+    const targetCount = targetStudents.length;
+
+    const subs = this.getSubmissions(activityId);
+    const submittedMembershipIds = new Set(subs.map(s => s.membershipId || s.participantCode.toUpperCase()));
+    
+    const submittedCount = targetStudents.filter(s => 
+      submittedMembershipIds.has(s.id) || submittedMembershipIds.has(s.participantCode.toUpperCase())
+    ).length;
+    const unsubmittedCount = Math.max(0, targetCount - submittedCount);
+
+    const koreaSubs = subs.filter(s => s.partnerSide === 'Korea Class').length;
+    const taiwanSubs = subs.filter(s => s.partnerSide === 'Taiwan Class').length;
+
+    const allComments = this.getComments();
+    const subIds = new Set(subs.map(s => s.id));
+    const commentsCount = allComments.filter(c => c.activityId === activityId || subIds.has(c.submissionId)).length;
+    const likesCount = subs.reduce((acc, cur) => acc + (cur.likesCount || 0), 0);
+
+    return {
+      activity: act,
+      targetCount,
+      submittedCount,
+      unsubmittedCount,
+      koreaSubmissionsCount: koreaSubs,
+      taiwanSubmissionsCount: taiwanSubs,
+      commentsCount,
+      likesCount,
+    };
+  }
+
+  public getStudentPortfolio(studentId: string): StudentPortfolioData | null {
+    const student = this.getStudentById(studentId);
+    if (!student) return null;
+
+    // All active or assigned activities (excluding archived from default student view)
+    const activities = this.getActivities(true).filter(a => a.status !== 'archived');
+    const mySideActivities = activities.filter(a => a.targetSide === 'Both' || a.targetSide === student.partnerSide);
+    
+    const allSubs = this.getSubmissions();
+    const mySubs = allSubs.filter(s => s.membershipId === student.id || s.participantCode.toUpperCase() === student.participantCode.toUpperCase());
+    
+    const allComments = this.getComments();
+    const myComments = allComments.filter(c => c.membershipId === student.id || c.participantCode.toUpperCase() === student.participantCode.toUpperCase());
+    
+    const notes = this.getTeacherNotes();
+    const teacherNote = notes[student.id];
+
+    let questionsCount = 0;
+    let answersCount = 0;
+    mySubs.forEach(s => {
+      if (s.type === 'qa_question') questionsCount++;
+      if (s.type === 'qa_answer') answersCount++;
+    });
+
+    const records: StudentPortfolioRecord[] = mySideActivities.map(act => {
+      const sub = mySubs.find(s => s.activityId === act.id);
+      const isCompleted = !!sub;
+      const actComments = myComments.filter(c => c.activityId === act.id || (sub && c.submissionId === sub.id));
+      const likesReceived = sub ? (sub.likesCount || 0) : 0;
+
+      return {
+        activity: act,
+        isCompleted,
+        submission: sub,
+        studentComments: actComments,
+        likesReceived,
+        teacherNote
+      };
+    });
+
+    const completedCount = records.filter(r => r.isCompleted).length;
+    const incompleteCount = records.filter(r => !r.isCompleted).length;
+    const likesReceivedCount = mySubs.reduce((acc, cur) => acc + (cur.likesCount || 0), 0);
+
+    return {
+      student,
+      totalAssigned: mySideActivities.length,
+      completedCount,
+      incompleteCount,
+      questionsCount,
+      answersCount,
+      commentsCount: myComments.length,
+      likesReceivedCount,
+      records
+    };
   }
 
   // --- Submissions (Posts / Polls / QA) ---

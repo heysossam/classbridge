@@ -37,7 +37,13 @@ export const StudentJoin: React.FC<StudentJoinProps> = ({
 
     if (!verified) {
       // Standard strict error message required by PRD Section 6
-      setErrorMessage('교류방 정보 또는 참여코드를 확인해 주세요.');
+      setErrorMessage(
+        currentLang === 'ko' 
+          ? '교류방 정보 또는 참여코드를 확인해 주세요.' 
+          : currentLang === 'zh-TW' 
+          ? '請檢查交流室資訊或參與代碼。' 
+          : 'Please check your exchange room code or participant code.'
+      );
       return;
     }
 
@@ -182,7 +188,7 @@ export const StudentJoin: React.FC<StudentJoinProps> = ({
               type="text"
               value={participantCode}
               onChange={(e) => setParticipantCode(e.target.value)}
-              placeholder="예: K7M4 또는 T7A4"
+              placeholder={currentLang === 'ko' ? '예: K7M4 또는 T7A4' : currentLang === 'zh-TW' ? '例：K7M4 或 T7A4' : 'e.g. K7M4 or T7A4'}
               maxLength={6}
               style={{ 
                 width: '100%', 
@@ -207,7 +213,7 @@ export const StudentJoin: React.FC<StudentJoinProps> = ({
                 type="text"
                 value={englishNickname}
                 onChange={(e) => setEnglishNickname(e.target.value)}
-                placeholder="예: Sunny, Leo, Alice"
+                placeholder={currentLang === 'ko' ? '예: Sunny, Leo, Alice' : currentLang === 'zh-TW' ? '例：Sunny, Leo, Alice' : 'e.g. Sunny, Leo, Alice'}
                 style={{ 
                   width: '100%', 
                   padding: '12px 14px 12px 38px', 
@@ -233,7 +239,13 @@ export const StudentJoin: React.FC<StudentJoinProps> = ({
 
         <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '0.78rem', color: 'var(--color-text-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
           <ShieldCheck size={14} />
-          <span>본 인증은 LocalStorage 시연용 화이트리스트 접근 제한으로 구동됩니다.</span>
+          <span>
+            {currentLang === 'ko' 
+              ? '본 인증은 LocalStorage 시연용 화이트리스트 접근 제한으로 구동됩니다.' 
+              : currentLang === 'zh-TW' 
+              ? '本認證由 LocalStorage 示範白名單權限限制驅動。' 
+              : 'Authentication secured via LocalStorage demo whitelist access restriction.'}
+          </span>
         </div>
       </div>
     </div>

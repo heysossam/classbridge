@@ -32,7 +32,13 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({
 
     const verified = dataService.verifyTeacherCode(authCode);
     if (!verified) {
-      setErrorMessage(currentLang === 'ko' ? '올바른 교사 시연 코드를 입력하세요.' : 'Please enter a valid teacher code.');
+      setErrorMessage(
+        currentLang === 'ko' 
+          ? '올바른 교사 시연 코드를 입력하세요.' 
+          : currentLang === 'zh-TW' 
+          ? '請輸入有效的教師示範代碼。' 
+          : 'Please enter a valid teacher code.'
+      );
       return;
     }
 
@@ -103,7 +109,7 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({
           fontSize: '0.8rem'
         }}>
           <div style={{ fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: '8px' }}>
-            {currentLang === 'ko' ? '시연용 빠른 선택 (교사 인증 코드):' : 'Demo Teacher Codes:'}
+            {currentLang === 'ko' ? '시연용 빠른 선택 (교사 인증 코드):' : currentLang === 'zh-TW' ? '示範快速選擇（教師代碼）：' : 'Demo Teacher Codes:'}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             <button
@@ -134,14 +140,14 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)', marginBottom: '6px' }}>
-              {currentLang === 'ko' ? '교사 인증 코드' : 'Teacher Access Code'}
+              {currentLang === 'ko' ? '교사 인증 코드' : currentLang === 'zh-TW' ? '教師驗證代碼' : 'Teacher Access Code'}
             </label>
             <div style={{ position: 'relative' }}>
               <input
                 type="text"
                 value={authCode}
                 onChange={(e) => setAuthCode(e.target.value)}
-                placeholder="예: K-TEACH-2026 또는 T-TEACH-2026"
+                placeholder={currentLang === 'ko' ? '예: K-TEACH-2026 또는 T-TEACH-2026' : currentLang === 'zh-TW' ? '例：K-TEACH-2026 或 T-TEACH-2026' : 'e.g. K-TEACH-2026 or T-TEACH-2026'}
                 style={{ 
                   width: '100%', 
                   padding: '12px 14px 12px 38px', 
@@ -161,14 +167,20 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({
             className="btn-primary"
             style={{ width: '100%', padding: '14px', fontSize: '1rem', marginTop: '6px' }}
           >
-            <span>{currentLang === 'ko' ? '교사 대시보드 입장' : 'Enter Teacher Dashboard'}</span>
+            <span>{currentLang === 'ko' ? '교사 대시보드 입장' : currentLang === 'zh-TW' ? '進入教師儀表板' : 'Enter Teacher Dashboard'}</span>
             <ArrowRight size={18} />
           </button>
         </form>
 
         <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '0.78rem', color: 'var(--color-text-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
           <ShieldCheck size={16} />
-          <span>{currentLang === 'ko' ? '교사 인증 및 데이터 접근 권한이 분리됩니다' : 'Role-based Teacher Access'}</span>
+          <span>
+            {currentLang === 'ko' 
+              ? '교사 인증 및 데이터 접근 권한이 분리됩니다' 
+              : currentLang === 'zh-TW' 
+              ? '具備教師身分驗證與權限隔離機制' 
+              : 'Role-based Teacher Access'}
+          </span>
         </div>
       </div>
     </div>

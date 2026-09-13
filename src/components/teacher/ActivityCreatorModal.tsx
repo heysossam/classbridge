@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Check, Sparkles, AlertCircle } from 'lucide-react';
-import { Activity, ActivityType, TargetSide, VisibilityScope, SentenceFrame, PollOption } from '../../types';
+import { X, Plus, Trash2, Check, Sparkles, AlertCircle, Camera } from 'lucide-react';
+import { Activity, ActivityType, TargetSide, VisibilityScope, SentenceFrame, PollOption, Language } from '../../types';
 import { dataService } from '../../services/dataService';
 
 interface ActivityCreatorModalProps {
+  currentLang?: Language;
   activityToEdit?: Activity | null;
   onClose: () => void;
   onSaved: (activity: Activity) => void;
 }
 
 export const ActivityCreatorModal: React.FC<ActivityCreatorModalProps> = ({
+  currentLang = 'ko',
   activityToEdit,
   onClose,
   onSaved,
@@ -477,7 +479,26 @@ export const ActivityCreatorModal: React.FC<ActivityCreatorModalProps> = ({
                 <input type="checkbox" checked={viewAfterSubmit} onChange={(e) => setViewAfterSubmit(e.target.checked)} /> 제출 후 다른 학생 글 보기
               </label>
             </div>
+          {/* Future Photo Policy Notice */}
+          <div style={{
+            background: 'var(--bg-subtle)',
+            border: '1px solid var(--color-border-light)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '10px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            fontSize: '0.8rem',
+            color: 'var(--color-text-muted)'
+          }}>
+            <Camera size={16} color="var(--color-secondary)" style={{ flexShrink: 0 }} />
+            <span>
+              {currentLang === 'ko' && '학생 사진 첨부 기능은 개인정보 보호를 위해 교사 승인 방식으로 추후 제공됩니다.'}
+              {currentLang === 'en' && 'Student photo attachments will be available later with teacher approval for privacy protection.'}
+              {currentLang === 'zh-TW' && '為保護個人資料，學生照片附件功能將於日後以教師審核方式提供。'}
+            </span>
           </div>
+        </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', paddingTop: '10px', borderTop: '1px solid var(--color-border-light)' }}>
             <button type="button" onClick={onClose} className="btn-outline" style={{ padding: '8px 18px' }}>취소</button>

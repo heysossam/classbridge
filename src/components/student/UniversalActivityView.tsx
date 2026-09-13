@@ -4,7 +4,7 @@ import {
   Clock, AlertCircle, BarChart2, MessageCircleQuestion, FileText, Trash2, Check
 } from 'lucide-react';
 import { Language, StudentMembership, Activity, Submission, Comment } from '../../types';
-import { getTranslation } from '../../services/i18n';
+import { getTranslation, getLocalizedActivityContent } from '../../services/i18n';
 import { dataService } from '../../services/dataService';
 
 interface UniversalActivityViewProps {
@@ -42,6 +42,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState('');
+  const [subViewModes, setSubViewModes] = useState<Record<string, 'original' | 'translation'>>({});
 
   // QA Question Answer target
   const [answeringQuestionId, setAnsweringQuestionId] = useState<string | null>(null);
@@ -52,6 +53,23 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
   );
 
   const canSubmitMore = mySubmissions.length < activity.submissionLimit;
+
+  // Filter submissions by activity visibility scope
+  const visibleSubmissions = submissions.filter(sub => {
+    const isMine = sub.participantCode.toUpperCase() === student.participantCode.toUpperCase();
+    if (sub.isHidden && !isMine) return false;
+
+    if (activity.visibility === 'author_and_teacher') {
+      return isMine;
+    }
+    if (activity.visibility === 'my_class') {
+      return sub.partnerSide === student.partnerSide;
+    }
+    if (activity.visibility === 'teachers_only') {
+      return false;
+    }
+    return true;
+  });
 
   // Insert Sentence Frame into content
   const handleInsertFrame = (frame: string) => {
@@ -192,12 +210,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
     setSubmissions(dataService.getSubmissions(activity.id));
   };
 
-  // Get instructions
-  const getInstructions = () => {
-    if (currentLang === 'zh-TW' && activity.instructionsZh) return activity.instructionsZh;
-    if (currentLang === 'en' && activity.instructionsEn) return activity.instructionsEn;
-    return activity.instructionsKo || activity.instructionsEn;
-  };
+  const localizedContent = getLocalizedActivityContent(activity, currentLang);
 
   // Poll options filtering for student side
   const pollOptions = activity.pollConfig?.options.filter(
@@ -210,7 +223,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <button onClick={onBack} className="btn-outline" style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
           <ArrowLeft size={16} />
-          <span>{currentLang === 'ko' ? '활동 목록으로' : 'Back to Activities'}</span>
+          <span>{currentLang === 'ko' ? '활동 목록으로' : currentLang === 'zh-TW' ? '返回活動清單' : 'Back to Activities'}</span>
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -224,22 +237,31 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
 
       {/* Activity Header Card */}
       <div className="cb-card" style={{ marginBottom: '24px', borderTop: '4px solid var(--color-primary)' }}>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
           <span className="badge badge-neutral" style={{ textTransform: 'uppercase' }}>{activity.type}</span>
           <span className={`badge ${activity.isRequired ? 'badge-accent' : 'badge-neutral'}`}>
-            {activity.isRequired ? '필수' : '선택'}
+            {activity.isRequired 
+              ? (currentLang === 'ko' ? '필수' : currentLang === 'zh-TW' ? '必修' : 'Required')
+              : (currentLang === 'ko' ? '선택' : currentLang === 'zh-TW' ? '選修' : 'Elective')}
           </span>
           <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-            마감일: {activity.dueDate}
+            {currentLang === 'ko' ? '마감일' : currentLang === 'zh-TW' ? '截止日' : 'Due'}: {activity.dueDate}
           </span>
         </div>
 
         <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--color-primary)', marginBottom: '8px' }}>
-          {activity.title}
+          {localizedContent.title}
         </h1>
 
+        {localizedContent.isFallback && localizedContent.fallbackNotice && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#FFFBEB', color: '#B45309', padding: '4px 10px', borderRadius: 'var(--radius-xs)', fontSize: '0.78rem', marginBottom: '10px' }}>
+            <AlertCircle size={14} />
+            <span>{localizedContent.fallbackNotice}</span>
+          </div>
+        )}
+
         <p style={{ color: 'var(--color-text)', fontSize: '0.95rem', lineHeight: 1.5 }}>
-          {getInstructions()}
+          {localizedContent.instructions}
         </p>
       </div>
 
@@ -292,9 +314,12 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
             {/* Poll Options Grid */}
             {activity.type === 'poll' && (
               <div>
-                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: 'var(--color-text)', marginBottom: '8px' }}>
-                  {currentLang === 'ko' ? '선택지를 골라주세요:' : 'Choose your option:'}
+                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: 'var(--color-text)', marginBottom: '4px' }}>
+                  {currentLang === 'ko' ? '선택지를 골라주세요:' : currentLang === 'zh-TW' ? '請選擇選項：' : 'Choose your option:'}
                 </label>
+                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-light)', marginBottom: '8px' }}>
+                  ※ {t('activity.teacherMockImageNotice')}
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
                   {pollOptions.map(opt => {
                     const isSelected = selectedOptions.includes(opt.id);
@@ -389,16 +414,24 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
       {/* Submissions Feed */}
       <div>
         <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-primary)', marginBottom: '16px' }}>
-          {currentLang === 'ko' ? '친구들의 활동 기록' : 'Classroom Feed'} ({submissions.length})
+          {currentLang === 'ko' ? '친구들의 활동 기록' : currentLang === 'zh-TW' ? '同儕活動成果' : 'Classroom Feed'} ({visibleSubmissions.length})
         </h3>
 
-        {submissions.length === 0 ? (
+        {activity.visibility === 'teachers_only' ? (
           <div className="cb-card" style={{ textAlign: 'center', padding: '32px', color: 'var(--color-text-muted)' }}>
-            아직 제출된 글이 없습니다. 첫 번째로 소중한 의견을 공유해 보세요!
+            {currentLang === 'ko' && '본 활동은 양국 교사만 열람할 수 있도록 설정되어 있습니다.'}
+            {currentLang === 'en' && 'This activity is configured to be viewable by teachers only.'}
+            {currentLang === 'zh-TW' && '此活動目前設定為僅限兩國教師查閱。'}
+          </div>
+        ) : visibleSubmissions.length === 0 ? (
+          <div className="cb-card" style={{ textAlign: 'center', padding: '32px', color: 'var(--color-text-muted)' }}>
+            {currentLang === 'ko' && '아직 제출된 글이 없습니다. 첫 번째로 소중한 의견을 공유해 보세요!'}
+            {currentLang === 'en' && 'No submissions yet. Be the first to share your thoughts!'}
+            {currentLang === 'zh-TW' && '尚未有繳交之作品。歡迎搶先發表您的第一則意見！'}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {submissions.map(sub => {
+            {visibleSubmissions.map(sub => {
               const isMine = sub.participantCode.toUpperCase() === student.participantCode.toUpperCase();
               const subComments = allComments.filter(c => c.submissionId === sub.id && !c.isHidden);
               const isLikedByMe = sub.likedBy.includes(student.participantCode.toUpperCase());
@@ -475,10 +508,41 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                     </p>
                   )}
 
-                  {/* English Translation */}
+                  {/* English Translation Toggle */}
                   {sub.translationEn && (
-                    <div style={{ background: '#FAF9F5', padding: '8px 12px', borderRadius: 'var(--radius-xs)', fontSize: '0.85rem', color: 'var(--color-text-muted)', fontStyle: 'italic', marginBottom: '10px' }}>
-                      Eng: "{sub.translationEn}"
+                    <div style={{ marginBottom: '10px' }}>
+                      <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
+                        <button
+                          type="button"
+                          onClick={() => setSubViewModes(prev => ({ ...prev, [sub.id]: 'original' }))}
+                          className="btn-outline"
+                          style={{
+                            padding: '3px 8px', fontSize: '0.72rem',
+                            background: subViewModes[sub.id] !== 'translation' ? 'var(--color-primary)' : 'transparent',
+                            color: subViewModes[sub.id] !== 'translation' ? '#fff' : 'var(--color-text)'
+                          }}
+                        >
+                          {t('submissionDetail.viewOriginal')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSubViewModes(prev => ({ ...prev, [sub.id]: 'translation' }))}
+                          className="btn-outline"
+                          style={{
+                            padding: '3px 8px', fontSize: '0.72rem',
+                            background: subViewModes[sub.id] === 'translation' ? 'var(--color-secondary)' : 'transparent',
+                            color: subViewModes[sub.id] === 'translation' ? '#fff' : 'var(--color-text)'
+                          }}
+                        >
+                          {t('submissionDetail.viewTranslation')}
+                        </button>
+                      </div>
+
+                      {subViewModes[sub.id] === 'translation' && (
+                        <div style={{ background: '#FAF9F5', padding: '8px 12px', borderRadius: 'var(--radius-xs)', fontSize: '0.85rem', color: 'var(--color-text-muted)', fontStyle: 'italic', border: '1px solid var(--color-border-light)' }}>
+                          Eng: "{sub.translationEn}"
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -622,12 +686,12 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                       </div>
                     </div>
                   )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
