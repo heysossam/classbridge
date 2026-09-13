@@ -57,7 +57,7 @@ export const Header: React.FC<HeaderProps> = ({
                   style={{ fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px', background: '#EFF6FF', color: '#1E40AF', borderColor: '#BFDBFE' }}
                 >
                   <Database size={12} color="#2563EB" />
-                  <span>평가자 체험</span>
+                  <span>{t('app.modeReviewer')}</span>
                 </span>
               ) : isFirebaseLive ? (
                 <span 
@@ -66,7 +66,7 @@ export const Header: React.FC<HeaderProps> = ({
                   style={{ fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px' }}
                 >
                   <Flame size={12} color="#10B981" />
-                  <span>Firebase 실시간</span>
+                  <span>{t('app.modeFirebase')}</span>
                 </span>
               ) : (
                 <span 
@@ -75,7 +75,7 @@ export const Header: React.FC<HeaderProps> = ({
                   style={{ fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px' }}
                 >
                   <Database size={12} color="#6B7280" />
-                  <span>데모 모드</span>
+                  <span>{t('app.modeDemo')}</span>
                 </span>
               )}
             </div>
@@ -130,7 +130,7 @@ export const Header: React.FC<HeaderProps> = ({
           fontWeight: 600
         }}>
           <AlertCircle size={16} />
-          <span>Firebase 연결 설정이 필요합니다. .env.local에 VITE_FIREBASE_* 설정을 추가해 주세요. (현재 로컬 데모 모드로 작동 중입니다)</span>
+          <span>{t('app.firebaseConfigNotice')}</span>
         </div>
       )}
     </>

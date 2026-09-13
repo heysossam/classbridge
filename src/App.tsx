@@ -191,7 +191,13 @@ export default function App() {
     } catch (unexpectedErr) {
       console.error('Unexpected student entry error:', unexpectedErr);
       setStudentEntryStatus('error');
-      setStudentEntryError('입장하지 못했습니다. 참여코드를 확인하고 다시 시도해 주세요.');
+      setStudentEntryError(
+        currentLang === 'zh-TW'
+          ? '未能進入。請確認參與代碼後再試一次。'
+          : currentLang === 'en'
+          ? 'Failed to enter. Please check your participant code and try again.'
+          : '입장하지 못했습니다. 참여코드를 확인하고 다시 시도해 주세요.'
+      );
     } finally {
       isProcessingEntryRef.current = false;
     }

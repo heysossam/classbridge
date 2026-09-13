@@ -110,9 +110,10 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
     if (isIndependentWritingMode) {
       e.preventDefault();
       setPasteAttempts(prev => prev + 1);
-      setPasteWarningNotice('이 활동은 스스로 문장을 만들어 보는 활동이에요. 필요한 경우 선생님께 붙여넣기 허용을 요청하세요.');
+      const noticeText = t('studentActivity.pasteWarningNotice');
+      setPasteWarningNotice(noticeText);
       setTimeout(() => {
-        setPasteWarningNotice(prev => prev === '이 활동은 스스로 문장을 만들어 보는 활동이에요. 필요한 경우 선생님께 붙여넣기 허용을 요청하세요.' ? '' : prev);
+        setPasteWarningNotice(prev => prev === noticeText ? '' : prev);
       }, 7000);
     }
   };
@@ -174,22 +175,28 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
     setFormError('');
 
     if (!canSubmitMore) {
-      setFormError(`제출 제한(${activity.submissionLimit}개)에 도달했습니다.`);
+      setFormError(
+        currentLang === 'ko'
+          ? `제출 제한(${activity.submissionLimit}개)에 도달했습니다.`
+          : currentLang === 'zh-TW'
+          ? `已達提交上限（${activity.submissionLimit}篇）。`
+          : `Submission limit (${activity.submissionLimit}) reached.`
+      );
       return;
     }
 
     if (activity.type === 'poll') {
       if (selectedOptions.length === 0) {
-        setFormError(currentLang === 'ko' ? '최소 1개의 선택지를 골라주세요.' : 'Please select at least one option.');
+        setFormError(t('studentActivity.selectAtLeastOneOption'));
         return;
       }
       if (activity.pollConfig?.requireReason && !postContent.trim()) {
-        setFormError(currentLang === 'ko' ? '선택 이유를 작성해 주세요.' : 'Please write your reason.');
+        setFormError(t('studentActivity.writeReasonPrompt'));
         return;
       }
     } else {
       if (!postContent.trim()) {
-        setFormError(currentLang === 'ko' ? '내용을 작성해 주세요.' : 'Please enter content.');
+        setFormError(t('studentActivity.writeContentPrompt'));
         return;
       }
 
@@ -199,11 +206,23 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
       const unit = getUnitLabel(writingLang);
 
       if (activity.minWordCount && currentCount < recMin) {
-        setFormError(`최소 ${recMin}${unit} 이상 작성해 주세요. (현재: ${currentCount}${unit})`);
+        setFormError(
+          currentLang === 'ko'
+            ? `최소 ${recMin}${unit} 이상 작성해 주세요. (현재: ${currentCount}${unit})`
+            : currentLang === 'zh-TW'
+            ? `請至少輸入 ${recMin} 個${unit}。（目前：${currentCount} 個${unit}）`
+            : `Please write at least ${recMin} ${unit}. (Current: ${currentCount} ${unit})`
+        );
         return;
       }
       if (activity.maxWordCount && currentCount > recMax) {
-        setFormError(`최대 ${recMax}${unit} 이하로 작성해 주세요. (현재: ${currentCount}${unit})`);
+        setFormError(
+          currentLang === 'ko'
+            ? `최대 ${recMax}${unit} 이하로 작성해 주세요. (현재: ${currentCount}${unit})`
+            : currentLang === 'zh-TW'
+            ? `請勿超過 ${recMax} 個${unit}。（目前：${currentCount} 個${unit}）`
+            : `Please write no more than ${recMax} ${unit}. (Current: ${currentCount} ${unit})`
+        );
         return;
       }
     }
@@ -247,7 +266,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
     if (activity.qaConfig?.respondentScope === 'partner_only') {
       const q = submissions.find(s => s.id === questionId);
       if (q && q.partnerSide === student.partnerSide) {
-        alert(currentLang === 'ko' ? '상대국 학생 질문에만 답변할 수 있습니다.' : 'Only partner students can reply to this question.');
+        alert(t('studentActivity.partnerOnlyReplyAlert'));
         return;
       }
     }
@@ -301,7 +320,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
   const handleSaveEditSub = (subId: string) => {
     const res = dataService.updateSubmission(subId, { content: editContent.trim() }, student.participantCode);
     if (!res.success) {
-      alert(res.message || '과제물을 수정할 수 없습니다.');
+      alert(res.message || t('studentActivity.cannotEditSubmission'));
       return;
     }
     setEditingSubId(null);
@@ -321,7 +340,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <button onClick={onBack} className="btn-outline" style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
           <ArrowLeft size={16} />
-          <span>{currentLang === 'ko' ? '활동 목록으로' : currentLang === 'zh-TW' ? '返回活動清單' : 'Back to Activities'}</span>
+          <span>{t('studentActivity.backToActivities')}</span>
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -338,12 +357,10 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
           <span className="badge badge-neutral" style={{ textTransform: 'uppercase' }}>{activity.type}</span>
           <span className={`badge ${activity.isRequired ? 'badge-accent' : 'badge-neutral'}`}>
-            {activity.isRequired 
-              ? (currentLang === 'ko' ? '필수' : currentLang === 'zh-TW' ? '必修' : 'Required')
-              : (currentLang === 'ko' ? '선택' : currentLang === 'zh-TW' ? '選修' : 'Elective')}
+            {activity.isRequired ? t('studentActivity.required') : t('studentActivity.elective')}
           </span>
           <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-            {currentLang === 'ko' ? '마감일' : currentLang === 'zh-TW' ? '截止日' : 'Due'}: {activity.dueDate}
+            {t('studentActivity.dueDate')}: {activity.dueDate}
           </span>
         </div>
 
@@ -367,7 +384,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
       {activity.sentenceFrames && activity.sentenceFrames.length > 0 && (
         <div className="cb-card" style={{ marginBottom: '24px', background: 'var(--bg-subtle)' }}>
           <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '10px' }}>
-            {currentLang === 'ko' ? '💡 영어 문장 틀 (클릭하여 본문에 삽입):' : '💡 English Sentence Frames:'}
+            {t('studentActivity.sentenceFramesPrompt')}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             {activity.sentenceFrames.map(sf => (
@@ -398,15 +415,15 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
         <div className="cb-card" style={{ marginBottom: '32px', border: '2px solid var(--color-secondary-light)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
             <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-primary)', margin: 0 }}>
-              {activity.type === 'poll' ? (currentLang === 'ko' ? '투표 참여 및 이유 작성' : 'Cast Your Vote') :
-               activity.type === 'qa' ? (currentLang === 'ko' ? '상대국 친구에게 질문 등록' : 'Ask a Question') :
-               (currentLang === 'ko' ? '나의 글 작성하기' : 'Write Submission')}
+              {activity.type === 'poll' ? t('studentActivity.pollTitle') :
+               activity.type === 'qa' ? t('studentActivity.qaTitle') :
+               t('studentActivity.writingTitle')}
             </h3>
 
             {isIndependentWritingMode && (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: 'var(--radius-xs)', padding: '3px 8px', fontSize: '0.74rem', color: '#475569', fontWeight: 600 }}>
                 <PenTool size={12} />
-                <span>스스로 쓰기 모드 적용</span>
+                <span>{t('studentActivity.selfWritingMode')}</span>
               </span>
             )}
           </div>
@@ -424,10 +441,10 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
             <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 'var(--radius-sm)', padding: '10px 14px', color: '#991B1B', fontSize: '0.85rem', fontWeight: 500, display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '14px' }}>
               <ShieldAlert size={18} color="#DC2626" style={{ flexShrink: 0, marginTop: '2px' }} />
               <div>
-                <strong>따뜻한 배려 안내: </strong>
+                <strong>{t('studentActivity.friendlyGuidanceTitle')}</strong>
                 <span>{safetyNotice.friendlyAdvice}</span>
                 <div style={{ fontSize: '0.75rem', color: '#B91C1C', marginTop: '3px' }}>
-                  ※ 입력하신 내용은 교사의 안전 확인을 거친 후 친구들에게 공유됩니다.
+                  {t('studentActivity.friendlyGuidanceNotice')}
                 </div>
               </div>
             </div>
@@ -444,7 +461,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
             {activity.type === 'poll' && (
               <div>
                 <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: 'var(--color-text)', marginBottom: '4px' }}>
-                  {currentLang === 'ko' ? '선택지를 골라주세요:' : currentLang === 'zh-TW' ? '請選擇選項：' : 'Choose your option:'}
+                  {t('studentActivity.chooseOptionLabel')}
                 </label>
                 <div style={{ fontSize: '0.75rem', color: 'var(--color-text-light)', marginBottom: '8px' }}>
                   ※ {t('activity.teacherMockImageNotice')}
@@ -483,7 +500,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
             {activity.type === 'writing' && (
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)', marginBottom: '6px' }}>
-                  {currentLang === 'ko' ? '제목 (선택 사항)' : 'Title (Optional)'}
+                  {t('studentActivity.titleOptional')}
                 </label>
                 <input
                   type="text"
@@ -497,7 +514,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                   onPaste={handlePasteBlock}
                   onDrop={handlePasteBlock}
                   onBeforeInput={handleBeforeInput}
-                  placeholder="예: My Favorite Spot in Seoul"
+                  placeholder={t('studentActivity.titlePlaceholder')}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.95rem' }}
                 />
               </div>
@@ -507,7 +524,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
             <div style={{ marginBottom: '14px', background: 'var(--bg-subtle)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                 <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text)' }}>
-                  {currentLang === 'ko' ? '작성 언어' : currentLang === 'zh-TW' ? '書寫語言' : 'Writing Language'}
+                  {t('studentActivity.writingLanguageLabel')}
                 </span>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   {(['en', 'ko', 'zh-TW'] as WritingLanguage[]).map((lang) => {
@@ -542,7 +559,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
                 <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text)' }}>
-                  {activity.type === 'poll' ? (currentLang === 'ko' ? '선택 이유 (작성 언어)' : 'Reason') : (currentLang === 'ko' ? '본문' : 'Content')}
+                  {activity.type === 'poll' ? t('studentActivity.reasonLabelPoll') : t('studentActivity.contentLabel')}
                 </label>
                 {/* 언어별 분량 표기 (본문만 계산, 권장 분량 고정) */}
                 <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-primary)' }}>
@@ -575,7 +592,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
             {activity.type === 'writing' && (
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)', marginBottom: '6px' }}>
-                  {currentLang === 'ko' ? '영어 번역문 (선택 사항)' : 'English Translation (Optional)'}
+                  {t('studentActivity.translationOptional')}
                 </label>
                 <textarea
                   value={translationEn}
@@ -584,7 +601,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                   onDrop={handlePasteBlock}
                   onBeforeInput={handleBeforeInput}
                   rows={2}
-                  placeholder="상대국 친구들을 위한 영문 설명이 있다면 적어보세요..."
+                  placeholder={t('studentActivity.translationPlaceholder')}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
                 />
               </div>
@@ -594,15 +611,15 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
             {activity.type === 'writing' && activity.requireAssistanceDeclaration !== false && (
               <div style={{ background: '#F8FAFC', padding: '12px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '8px' }}>
-                  ✍️ 이 글을 작성할 때 도움받은 방법을 선택해 주세요:
+                  {t('studentActivity.helpDeclarationTitle')}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
                   {[
-                    { id: 'direct_thought', label: '내 생각으로 직접 작성함' },
-                    { id: 'sentence_frames', label: '수업에서 제공한 문장 틀을 활용함' },
-                    { id: 'dictionary_translation', label: '사전 또는 번역기의 도움을 받음' },
-                    { id: 'generative_ai', label: '생성형 AI의 도움을 받음' },
-                    { id: 'teacher_peer', label: '교사 또는 친구의 도움을 받음' },
+                    { id: 'direct_thought', label: t('studentActivity.helpDirectThought') },
+                    { id: 'sentence_frames', label: t('studentActivity.helpSentenceFrames') },
+                    { id: 'dictionary_translation', label: t('studentActivity.helpDictionary') },
+                    { id: 'generative_ai', label: t('studentActivity.helpAi') },
+                    { id: 'teacher_peer', label: t('studentActivity.helpTeacherPeer') },
                   ].map((item) => {
                     const isChecked = selectedAssistance.includes(item.id);
                     return (
@@ -624,14 +641,14 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                   })}
                 </div>
                 <div style={{ fontSize: '0.74rem', color: 'var(--color-text-muted)', marginTop: '8px' }}>
-                  ※ 도움 도구를 사용했다고 해서 감점되지 않으며, 솔직한 자기표시는 선생님의 맞춤 지도에 큰 도움이 됩니다.
+                  {t('studentActivity.helpDeclarationNotice')}
                 </div>
               </div>
             )}
 
             <button type="submit" className="btn-accent" style={{ alignSelf: 'flex-end', padding: '12px 24px', fontSize: '0.95rem' }}>
               <Send size={16} />
-              <span>{currentLang === 'ko' ? '제출하기' : 'Submit'}</span>
+              <span>{t('studentActivity.submitPostBtn')}</span>
             </button>
           </form>
         </div>
@@ -640,20 +657,16 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
       {/* Submissions Feed */}
       <div>
         <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-primary)', marginBottom: '16px' }}>
-          {currentLang === 'ko' ? '친구들의 활동 기록' : currentLang === 'zh-TW' ? '同儕活動成果' : 'Classroom Feed'} ({visibleSubmissions.length})
+          {t('studentActivity.feedTitle')} ({visibleSubmissions.length})
         </h3>
 
         {activity.visibility === 'teachers_only' ? (
           <div className="cb-card" style={{ textAlign: 'center', padding: '32px', color: 'var(--color-text-muted)' }}>
-            {currentLang === 'ko' && '본 활동은 양국 교사만 열람할 수 있도록 설정되어 있습니다.'}
-            {currentLang === 'en' && 'This activity is configured to be viewable by teachers only.'}
-            {currentLang === 'zh-TW' && '此活動目前設定為僅限兩國教師查閱。'}
+            {t('studentActivity.teacherOnlyViewNotice')}
           </div>
         ) : visibleSubmissions.length === 0 ? (
           <div className="cb-card" style={{ textAlign: 'center', padding: '32px', color: 'var(--color-text-muted)' }}>
-            {currentLang === 'ko' && '아직 제출된 글이 없습니다. 첫 번째로 소중한 의견을 공유해 보세요!'}
-            {currentLang === 'en' && 'No submissions yet. Be the first to share your thoughts!'}
-            {currentLang === 'zh-TW' && '尚未有繳交之作品。歡迎搶先發表您的第一則意見！'}
+            {t('studentActivity.noSubmissionsNotice')}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -680,7 +693,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                         {sub.partnerSide === 'Korea Class' ? '🇰🇷 KR' : '🇹🇼 TW'}
                       </span>
                       {isMine && (
-                        <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>내 글</span>
+                        <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>{t('studentActivity.myPostBadge')}</span>
                       )}
                     </div>
 
@@ -693,7 +706,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                   {isPendingForAuthor && (
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#FEF3C7', color: '#92400E', padding: '4px 10px', borderRadius: 'var(--radius-xs)', fontSize: '0.78rem', fontWeight: 600, marginBottom: '8px' }}>
                       <ShieldAlert size={14} />
-                      <span>선생님 확인 중인 글입니다. (검토 완료 후 친구들에게 안전하게 공개됩니다)</span>
+                      <span>{t('studentActivity.reviewingNotice')}</span>
                     </div>
                   )}
 
@@ -701,14 +714,14 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                   {isMaskedForOther ? (
                     <div style={{ padding: '14px 16px', background: '#F8FAFC', borderRadius: 'var(--radius-sm)', border: '1px dashed #CBD5E1', color: '#64748B', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '10px', margin: '8px 0' }}>
                       <ShieldAlert size={18} color="#94A3B8" style={{ flexShrink: 0 }} />
-                      <span style={{ fontWeight: 500 }}>이 글은 안전한 교류를 위해 교사가 확인하고 있습니다.</span>
+                      <span style={{ fontWeight: 500 }}>{t('studentActivity.maskedPostNotice')}</span>
                     </div>
                   ) : (
                     <>
                       {/* QA Link notice */}
                       {sub.type === 'qa_answer' && parentQ && (
                         <div style={{ background: 'var(--bg-subtle)', padding: '6px 10px', borderRadius: 'var(--radius-xs)', fontSize: '0.8rem', color: 'var(--color-text-muted)', marginBottom: '8px' }}>
-                          ↳ <strong>{parentQ.englishNickname}</strong>의 질문에 대한 답변: "{parentQ.content}"
+                          ↳ <strong>{parentQ.englishNickname}</strong>{t('studentActivity.qaResponseTo')} "{parentQ.content}"
                         </div>
                       )}
 
@@ -719,7 +732,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                             const opt = activity.pollConfig?.options.find(o => o.id === optId);
                             return (
                               <span key={optId} className="badge badge-accent" style={{ fontSize: '0.78rem', marginRight: '6px' }}>
-                                선택: {opt ? opt.text : optId}
+                                {t('studentActivity.selectedLabel')}{opt ? opt.text : optId}
                               </span>
                             );
                           })}
@@ -743,8 +756,8 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                             style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.92rem' }}
                           />
                           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '6px' }}>
-                            <button onClick={() => setEditingSubId(null)} className="btn-outline" style={{ padding: '4px 10px', fontSize: '0.8rem' }}>취소</button>
-                            <button onClick={() => handleSaveEditSub(sub.id)} className="btn-primary" style={{ padding: '4px 12px', fontSize: '0.8rem' }}>수정 완료</button>
+                            <button onClick={() => setEditingSubId(null)} className="btn-outline" style={{ padding: '4px 10px', fontSize: '0.8rem' }}>{t('studentActivity.cancelEditBtn')}</button>
+                            <button onClick={() => handleSaveEditSub(sub.id)} className="btn-primary" style={{ padding: '4px 12px', fontSize: '0.8rem' }}>{t('studentActivity.saveEditBtn')}</button>
                           </div>
                         </div>
                       ) : (
@@ -806,7 +819,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: '#166534', fontSize: '0.85rem' }}>
                           <MessageSquare size={15} />
-                          <span>선생님 피드백</span>
+                          <span>{t('studentActivity.teacherFeedbackCardTitle')}</span>
                         </div>
                         <span style={{ fontSize: '0.72rem', color: '#15803D' }}>{teacherFeedback.updatedAt}</span>
                       </div>
@@ -853,7 +866,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                             className="btn-outline"
                             style={{ padding: '4px 10px', fontSize: '0.78rem' }}
                           >
-                            답변 작성하기
+                            {t('studentActivity.qaReplyBtn')}
                           </button>
                         )}
                       </div>
@@ -866,7 +879,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                           style={{ padding: '4px 10px', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                         >
                           <Edit2 size={13} />
-                          <span>수정</span>
+                          <span>{t('studentActivity.editPostBtn')}</span>
                         </button>
                       )}
                     </div>
@@ -876,18 +889,18 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                   {!isMaskedForOther && answeringQuestionId === sub.id && (
                     <div style={{ marginTop: '12px', background: 'var(--bg-subtle)', padding: '12px', borderRadius: 'var(--radius-sm)' }}>
                       <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '4px' }}>
-                        {sub.englishNickname}의 질문에 답변 작성:
+                        {sub.englishNickname}{t('studentActivity.qaReplyTo')}
                       </div>
                       <textarea
                         value={answerContent}
                         onChange={(e) => setAnswerContent(e.target.value)}
                         rows={2}
-                        placeholder="친절하고 구체적인 답변을 영어로 작성해 보세요..."
+                        placeholder={t('studentActivity.qaReplyPlaceholder')}
                         style={{ width: '100%', padding: '8px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--color-border)', fontSize: '0.88rem' }}
                       />
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', marginTop: '6px' }}>
-                        <button onClick={() => setAnsweringQuestionId(null)} className="btn-outline" style={{ padding: '4px 8px', fontSize: '0.78rem' }}>취소</button>
-                        <button onClick={() => handleAnswerSubmit(sub.id)} className="btn-accent" style={{ padding: '4px 12px', fontSize: '0.78rem' }}>답변 등록</button>
+                        <button onClick={() => setAnsweringQuestionId(null)} className="btn-outline" style={{ padding: '4px 8px', fontSize: '0.78rem' }}>{t('studentActivity.qaCancelBtn')}</button>
+                        <button onClick={() => handleAnswerSubmit(sub.id)} className="btn-accent" style={{ padding: '4px 12px', fontSize: '0.78rem' }}>{t('studentActivity.qaSubmitBtn')}</button>
                       </div>
                     </div>
                   )}
@@ -904,7 +917,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                           return (
                             <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 0', fontSize: '0.82rem', color: '#94A3B8', fontStyle: 'italic' }}>
                               <ShieldAlert size={13} color="#94A3B8" />
-                              <span>이 댓글은 안전한 교류를 위해 교사가 확인하고 있습니다.</span>
+                              <span>{t('studentActivity.commentMaskedNotice')}</span>
                             </div>
                           );
                         }
@@ -923,14 +936,14 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                                     onChange={(e) => setEditCommentText(e.target.value)}
                                     style={{ padding: '2px 6px', fontSize: '0.82rem' }}
                                   />
-                                  <button onClick={() => { dataService.updateComment(c.id, editCommentText); setEditingCommentId(null); setAllComments(dataService.getComments()); }}>완료</button>
+                                  <button onClick={() => { dataService.updateComment(c.id, editCommentText); setEditingCommentId(null); setAllComments(dataService.getComments()); }}>{t('studentActivity.commentDoneBtn')}</button>
                                 </span>
                               ) : (
                                 <span>{c.content}</span>
                               )}
                               {isMyComment && (c.isHidden || c.moderationStatus === 'needs_review') && (
                                 <span style={{ marginLeft: '6px', fontSize: '0.72rem', color: '#D97706', fontWeight: 600 }}>
-                                  (교사 검토 중)
+                                  {t('studentActivity.commentUnderReview')}
                                 </span>
                               )}
                             </div>
@@ -941,13 +954,13 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                                   onClick={() => { setEditingCommentId(c.id); setEditCommentText(c.content); }}
                                   style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}
                                 >
-                                  수정
+                                  {t('studentActivity.commentEditBtn')}
                                 </button>
                                 <button
                                   onClick={() => { dataService.deleteComment(c.id); setAllComments(dataService.getComments()); }}
                                   style={{ color: '#EF4444', fontSize: '0.75rem' }}
                                 >
-                                  삭제
+                                  {t('studentActivity.commentDeleteBtn')}
                                 </button>
                               </div>
                             )}
@@ -961,7 +974,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                           type="text"
                           value={commentInputs[sub.id] || ''}
                           onChange={(e) => setCommentInputs({ ...commentInputs, [sub.id]: e.target.value })}
-                          placeholder="따뜻한 응원이나 추천 댓글을 남겨보세요..."
+                          placeholder={t('studentActivity.commentPlaceholder')}
                           style={{ flex: 1, padding: '6px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.85rem' }}
                         />
                         <button
@@ -969,7 +982,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                           className="btn-secondary"
                           style={{ padding: '6px 14px', fontSize: '0.82rem' }}
                         >
-                          댓글
+                          {t('studentActivity.commentSubmitBtn')}
                         </button>
                       </div>
                     </div>

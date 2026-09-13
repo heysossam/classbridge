@@ -270,15 +270,21 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                   <div style={{ background: '#fff', padding: '8px 14px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--color-border)', textAlign: 'center' }}>
                     <div style={{ fontSize: '0.72rem', color: 'var(--color-text-light)', fontWeight: 600 }}>{t('teacher.totalTargetStudents')}</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-primary)' }}>{summaryStats.targetCount}명</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-primary)' }}>
+                      {summaryStats.targetCount}{currentLang === 'ko' ? '명' : currentLang === 'zh-TW' ? '人' : ''}
+                    </div>
                   </div>
                   <div style={{ background: '#fff', padding: '8px 14px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--color-border)', textAlign: 'center' }}>
                     <div style={{ fontSize: '0.72rem', color: 'var(--color-text-light)', fontWeight: 600 }}>{t('teacher.submitted')}</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-success)' }}>{summaryStats.submittedCount}명</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-success)' }}>
+                      {summaryStats.submittedCount}{currentLang === 'ko' ? '명' : currentLang === 'zh-TW' ? '人' : ''}
+                    </div>
                   </div>
                   <div style={{ background: '#fff', padding: '8px 14px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--color-border)', textAlign: 'center' }}>
                     <div style={{ fontSize: '0.72rem', color: 'var(--color-text-light)', fontWeight: 600 }}>{t('teacher.unsubmittedCount')}</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-accent)' }}>{summaryStats.unsubmittedCount}명</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-accent)' }}>
+                      {summaryStats.unsubmittedCount}{currentLang === 'ko' ? '명' : currentLang === 'zh-TW' ? '人' : ''}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -286,16 +292,16 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
               {/* Secondary Stats Strip */}
               <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '0.85rem', paddingTop: '10px', borderTop: '1px solid var(--color-border-light)' }}>
                 <span style={{ color: 'var(--color-text)' }}>
-                  🇰🇷 <strong>{t('teacher.koreaSubmissions')}:</strong> {summaryStats.koreaSubmissionsCount}건
+                  🇰🇷 <strong>{t('teacher.koreaSubmissions')}:</strong> {summaryStats.koreaSubmissionsCount}{currentLang === 'ko' ? '건' : currentLang === 'zh-TW' ? '篇' : ''}
                 </span>
                 <span style={{ color: 'var(--color-text)' }}>
-                  🇹🇼 <strong>{t('teacher.taiwanSubmissions')}:</strong> {summaryStats.taiwanSubmissionsCount}건
+                  🇹🇼 <strong>{t('teacher.taiwanSubmissions')}:</strong> {summaryStats.taiwanSubmissionsCount}{currentLang === 'ko' ? '건' : currentLang === 'zh-TW' ? '篇' : ''}
                 </span>
                 <span style={{ color: 'var(--color-text-muted)' }}>
-                  💬 <strong>{t('teacher.totalComments')}:</strong> {summaryStats.commentsCount}개
+                  💬 <strong>{t('teacher.totalComments')}:</strong> {summaryStats.commentsCount}{currentLang === 'ko' ? '개' : currentLang === 'zh-TW' ? '則' : ''}
                 </span>
                 <span style={{ color: 'var(--color-accent)' }}>
-                  ❤️ <strong>{t('teacher.totalLikes')}:</strong> {summaryStats.likesCount}개
+                  ❤️ <strong>{t('teacher.totalLikes')}:</strong> {summaryStats.likesCount}{currentLang === 'ko' ? '개' : currentLang === 'zh-TW' ? '個' : ''}
                 </span>
               </div>
             </div>
@@ -314,7 +320,7 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
                   onChange={(e) => setSideFilter(e.target.value as any)}
                   style={{ width: '100%', padding: '6px 10px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--color-border)', fontSize: '0.85rem' }}
                 >
-                  <option value="All">{t('teacher.all')} 학급</option>
+                  <option value="All">{t('teacher.all')} {currentLang === 'ko' ? '학급' : currentLang === 'zh-TW' ? '班級' : 'Classes'}</option>
                   <option value="Korea Class">🇰🇷 Korea Class</option>
                   <option value="Taiwan Class">🇹🇼 Taiwan Class</option>
                 </select>
@@ -323,16 +329,16 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
               {/* Status Filter */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-light)', marginBottom: '3px' }}>
-                  공개/승인 상태
+                  {currentLang === 'ko' ? '공개/승인 상태' : currentLang === 'zh-TW' ? '公開/審核狀態' : 'Status'}
                 </label>
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value as any)}
                   style={{ width: '100%', padding: '6px 10px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--color-border)', fontSize: '0.85rem' }}
                 >
-                  <option value="All">{t('teacher.all')} 상태</option>
-                  <option value="public">{t('teacher.public')} 작품</option>
-                  <option value="hidden">{t('teacher.hidden')} 작품</option>
+                  <option value="All">{t('teacher.all')} {currentLang === 'ko' ? '상태' : currentLang === 'zh-TW' ? '狀態' : 'Status'}</option>
+                  <option value="public">{t('teacher.public')} {currentLang === 'ko' ? '작품' : currentLang === 'zh-TW' ? '作品' : 'Works'}</option>
+                  <option value="hidden">{t('teacher.hidden')} {currentLang === 'ko' ? '작품' : currentLang === 'zh-TW' ? '作品' : 'Works'}</option>
                   <option value="pending">{t('teacher.pendingApproval')}</option>
                 </select>
               </div>
@@ -347,7 +353,7 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
                   onChange={(e) => setLangFilter(e.target.value)}
                   style={{ width: '100%', padding: '6px 10px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--color-border)', fontSize: '0.85rem' }}
                 >
-                  <option value="All">{t('teacher.all')} 언어</option>
+                  <option value="All">{t('teacher.all')} {currentLang === 'ko' ? '언어' : currentLang === 'zh-TW' ? '語言' : 'Languages'}</option>
                   <option value="en">English (en)</option>
                   <option value="ko">한국어 (ko)</option>
                   <option value="zh-TW">繁體中文 (zh-TW)</option>
@@ -363,7 +369,7 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
                   type="text"
                   value={searchNickname}
                   onChange={(e) => setSearchNickname(e.target.value)}
-                  placeholder="예: Sunny, Alice"
+                  placeholder={currentLang === 'ko' ? '예: Sunny, Alice' : currentLang === 'zh-TW' ? '例：Sunny, Alice' : 'e.g. Sunny, Alice'}
                   style={{ width: '100%', padding: '6px 10px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--color-border)', fontSize: '0.85rem' }}
                 />
               </div>
@@ -377,7 +383,7 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
                   type="text"
                   value={searchCode}
                   onChange={(e) => setSearchCode(e.target.value)}
-                  placeholder="예: K7M4"
+                  placeholder={currentLang === 'ko' ? '예: K7M4' : currentLang === 'zh-TW' ? '例：K7M4' : 'e.g. K7M4'}
                   style={{ width: '100%', padding: '6px 10px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--color-border)', fontSize: '0.85rem' }}
                 />
               </div>
@@ -406,7 +412,7 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-primary)' }}>
-                제출된 학생 작품 ({sortedSubmissions.length}개)
+                {currentLang === 'ko' ? `제출된 학생 작품 (${sortedSubmissions.length}개)` : currentLang === 'zh-TW' ? `已提交的學生作品（${sortedSubmissions.length} 件）` : `Submitted Works (${sortedSubmissions.length})`}
               </span>
             </div>
 
@@ -466,7 +472,7 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
                               const opt = selectedActivity.pollConfig?.options.find(o => o.id === optId);
                               return (
                                 <span key={optId} className="badge badge-accent" style={{ fontSize: '0.72rem', marginRight: '4px' }}>
-                                  선택: {opt ? opt.text : optId}
+                                  {currentLang === 'ko' ? '선택: ' : currentLang === 'zh-TW' ? '選擇：' : 'Selected: '}{opt ? opt.text : optId}
                                 </span>
                               );
                             })}
@@ -539,13 +545,13 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
           <div className="cb-card" style={{ padding: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' }}>
               <label style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--color-primary)' }}>
-                {t('teacher.portfolioTitle')} — 학생 선택 ({students.length}명):
+                {t('teacher.portfolioTitle')} — {currentLang === 'ko' ? `학생 선택 (${students.length}명):` : currentLang === 'zh-TW' ? `選擇學生（${students.length}人）：` : `Select Student (${students.length}):`}
               </label>
               <input
                 type="text"
                 value={portfolioStudentSearch}
                 onChange={(e) => setPortfolioStudentSearch(e.target.value)}
-                placeholder="영어 이름 또는 참여코드 검색..."
+                placeholder={currentLang === 'ko' ? '영어 이름 또는 참여코드 검색...' : currentLang === 'zh-TW' ? '搜尋英文姓名或參與代碼…' : 'Search nickname or code...'}
                 style={{ padding: '6px 10px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--color-border)', fontSize: '0.82rem', width: '220px' }}
               />
             </div>
@@ -598,22 +604,28 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
                     <span className="badge badge-neutral">Code: {portfolioData.student.participantCode}</span>
                   </div>
                   <h3 style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--color-primary)' }}>
-                    {portfolioData.student.englishNickname} 학생의 전체 수행 기록
+                    {currentLang === 'ko' ? `${portfolioData.student.englishNickname} 학생의 전체 수행 기록` : currentLang === 'zh-TW' ? `${portfolioData.student.englishNickname} 同學的完整學習歷程` : `Complete Records for ${portfolioData.student.englishNickname}`}
                   </h3>
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   <div style={{ background: '#fff', padding: '8px 14px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--color-border)', textAlign: 'center' }}>
                     <div style={{ fontSize: '0.72rem', color: 'var(--color-text-light)', fontWeight: 600 }}>{t('teacher.totalAssigned')}</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-primary)' }}>{portfolioData.totalAssigned}개</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-primary)' }}>
+                      {portfolioData.totalAssigned}{currentLang === 'ko' ? '개' : currentLang === 'zh-TW' ? '項' : ''}
+                    </div>
                   </div>
                   <div style={{ background: '#fff', padding: '8px 14px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--color-border)', textAlign: 'center' }}>
                     <div style={{ fontSize: '0.72rem', color: 'var(--color-text-light)', fontWeight: 600 }}>{t('teacher.completed')}</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-success)' }}>{portfolioData.completedCount}개</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-success)' }}>
+                      {portfolioData.completedCount}{currentLang === 'ko' ? '개' : currentLang === 'zh-TW' ? '項' : ''}
+                    </div>
                   </div>
                   <div style={{ background: '#fff', padding: '8px 14px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--color-border)', textAlign: 'center' }}>
                     <div style={{ fontSize: '0.72rem', color: 'var(--color-text-light)', fontWeight: 600 }}>{t('teacher.incomplete')}</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-accent)' }}>{portfolioData.incompleteCount}개</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-accent)' }}>
+                      {portfolioData.incompleteCount}{currentLang === 'ko' ? '개' : currentLang === 'zh-TW' ? '項' : ''}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -621,10 +633,10 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
               {/* Detailed Metrics Strip */}
               <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '0.85rem', paddingTop: '10px', borderTop: '1px solid var(--color-border-light)', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
-                  <span>❓ <strong>{t('teacher.questionsAsked')}:</strong> {portfolioData.questionsCount}건</span>
-                  <span>💡 <strong>{t('teacher.answersGiven')}:</strong> {portfolioData.answersCount}건</span>
-                  <span>💬 <strong>{t('teacher.commentsCount')}:</strong> {portfolioData.commentsCount}개</span>
-                  <span style={{ color: 'var(--color-accent)' }}>❤️ <strong>{t('teacher.likesReceived')}:</strong> {portfolioData.likesReceivedCount}개</span>
+                  <span>❓ <strong>{t('teacher.questionsAsked')}:</strong> {portfolioData.questionsCount}{currentLang === 'ko' ? '건' : currentLang === 'zh-TW' ? '則' : ''}</span>
+                  <span>💡 <strong>{t('teacher.answersGiven')}:</strong> {portfolioData.answersCount}{currentLang === 'ko' ? '건' : currentLang === 'zh-TW' ? '則' : ''}</span>
+                  <span>💬 <strong>{t('teacher.commentsCount')}:</strong> {portfolioData.commentsCount}{currentLang === 'ko' ? '개' : currentLang === 'zh-TW' ? '則' : ''}</span>
+                  <span style={{ color: 'var(--color-accent)' }}>❤️ <strong>{t('teacher.likesReceived')}:</strong> {portfolioData.likesReceivedCount}{currentLang === 'ko' ? '개' : currentLang === 'zh-TW' ? '個' : ''}</span>
                 </div>
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-accent)', cursor: 'pointer' }}>
@@ -665,7 +677,7 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
                             </span>
                             {rec.submission && (
                               <span style={{ fontSize: '0.78rem', color: 'var(--color-text-light)' }}>
-                                제출일: {rec.submission.submittedAt}
+                                {currentLang === 'ko' ? '제출일: ' : currentLang === 'zh-TW' ? '繳交日期：' : 'Submitted: '}{rec.submission.submittedAt}
                               </span>
                             )}
                           </div>
@@ -695,7 +707,7 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
                                 const opt = rec.activity.pollConfig?.options.find(o => o.id === optId);
                                 return (
                                   <span key={optId} className="badge badge-accent" style={{ marginRight: '6px', fontSize: '0.75rem' }}>
-                                    선택: {opt ? opt.text : optId}
+                                    {currentLang === 'ko' ? '선택: ' : currentLang === 'zh-TW' ? '選擇：' : 'Selected: '}{opt ? opt.text : optId}
                                   </span>
                                 );
                               })}
@@ -721,14 +733,14 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
                       ) : (
                         <div style={{ background: '#FFFBEB', color: '#B45309', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <Clock size={16} />
-                          <span>아직 제출되지 않은 과제입니다. 기한: {rec.activity.dueDate}</span>
+                          <span>{currentLang === 'ko' ? `아직 제출되지 않은 과제입니다. 기한: ${rec.activity.dueDate}` : currentLang === 'zh-TW' ? `尚未繳交之任務。期限：${rec.activity.dueDate}` : `Not submitted yet. Due: ${rec.activity.dueDate}`}</span>
                         </div>
                       )}
 
                       {/* Comments & Likes for this activity */}
                       {rec.studentComments.length > 0 && (
                         <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', marginBottom: '10px' }}>
-                          💬 학생이 이 활동에 작성한 댓글: {rec.studentComments.length}건
+                          {currentLang === 'ko' ? `💬 학생이 이 활동에 작성한 댓글: ${rec.studentComments.length}건` : currentLang === 'zh-TW' ? `💬 學生在此任務中留下的評論：${rec.studentComments.length} 則` : `💬 Student comments in this activity: ${rec.studentComments.length}`}
                         </div>
                       )}
                     </div>
@@ -745,11 +757,11 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                     <Lock size={18} color="var(--color-text-muted)" />
                     <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--color-text-muted)', margin: 0 }}>
-                      교사 비공개 관찰 메모 (평가자 체험 모드 열람 제한)
+                      {currentLang === 'ko' ? '교사 비공개 관찰 메모 (평가자 체험 모드 열람 제한)' : currentLang === 'zh-TW' ? '教師不公開觀察筆記（評審體驗模式限制檢視）' : 'Private Teacher Observation Note (Restricted in Demo)'}
                     </h4>
                   </div>
                   <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--color-text-light)' }}>
-                    보안 및 개인정보 보호 원칙에 따라 평가자 체험 모드에서는 비공개 교사 관찰 메모가 비공개 처리됩니다.
+                    {currentLang === 'ko' ? '보안 및 개인정보 보호 원칙에 따라 평가자 체험 모드에서는 비공개 교사 관찰 메모가 비공개 처리됩니다.' : currentLang === 'zh-TW' ? '基於安全與隱私保護原則，評審體驗模式中隱藏教師私人筆記。' : 'In accordance with security and privacy policies, private observation notes are hidden in evaluator demo mode.'}
                   </p>
                 </div>
               ) : (
@@ -757,7 +769,7 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
                     <Lock size={18} color="var(--color-secondary)" />
                     <h4 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)' }}>
-                      {selectedStudent.englishNickname} 학생 전용 교사 비공개 관찰 메모
+                      {currentLang === 'ko' ? `${selectedStudent.englishNickname} 학생 전용 교사 비공개 관찰 메모` : currentLang === 'zh-TW' ? `${selectedStudent.englishNickname} 同學專用教師不公開筆記` : `Private Teacher Observation Note for ${selectedStudent.englishNickname}`}
                     </h4>
                     <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
                       {t('teacher.privateNoteHidden')}
@@ -768,7 +780,7 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
                     rows={3}
                     value={portfolioNotes[selectedStudent.id] || ''}
                     onChange={(e) => setPortfolioNotes({ ...portfolioNotes, [selectedStudent.id]: e.target.value })}
-                    placeholder="학생의 포트폴리오를 종합 검토하고 수업 관찰 기록을 작성하세요..."
+                    placeholder={currentLang === 'ko' ? '학생의 포트폴리오를 종합 검토하고 수업 관찰 기록을 작성하세요...' : currentLang === 'zh-TW' ? '請綜合檢視學生學習歷程並撰寫課堂觀察紀錄…' : 'Review the student portfolio and write classroom observation notes...'}
                     style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.9rem', marginBottom: '8px' }}
                   />
 
