@@ -27,7 +27,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [room, setRoom] = useState<Room>(dataService.getRoom());
   const [students, setStudents] = useState<StudentMembership[]>(dataService.getStudents());
   const [responses, setResponses] = useState<StudentResponse[]>(dataService.getResponses());
-  const [selectedStudent, setSelectedStudent] = useState<StudentMembership | null>(null);
+  
+  const searchParams = new URLSearchParams(window.location.search);
+  const initialModalName = searchParams.get('modal');
+  const initStudent = initialModalName ? students.find(s => s.englishNickname.toLowerCase() === initialModalName.toLowerCase()) || null : null;
+
+  const [selectedStudent, setSelectedStudent] = useState<StudentMembership | null>(initStudent);
   const [filterSide, setFilterSide] = useState<'All' | 'Korea Class' | 'Taiwan Class'>('All');
 
   // Status mapping

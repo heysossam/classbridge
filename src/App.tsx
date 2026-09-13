@@ -17,16 +17,29 @@ type AppView =
   | 'admin';
 
 export default function App() {
-  const [currentLang, setCurrentLang] = useState<Language>('ko');
-  const [currentView, setCurrentView] = useState<AppView>('start');
+  const searchParams = new URLSearchParams(window.location.search);
+  const initialLang = (searchParams.get('lang') as Language) || 'ko';
+  const initialView = (searchParams.get('view') as AppView) || 'start';
 
-  // Student Session State
+  const [currentLang, setCurrentLang] = useState<Language>(initialLang);
+  const [currentView, setCurrentView] = useState<AppView>(initialView);
+
+  const studentCode = searchParams.get('code') || 'K7M4';
+  const studentName = searchParams.get('name') || 'Sunny';
+  const studentSide = (searchParams.get('side') as 'Korea Class' | 'Taiwan Class') || 'Korea Class';
+
+  // Student Session State (preset for easy testing or real login)
   const [studentSession, setStudentSession] = useState<{
     roomCode: string;
     participantCode: string;
     englishNickname: string;
     partnerSide: 'Korea Class' | 'Taiwan Class';
-  } | null>(null);
+  } | null>({
+    roomCode: 'BRIDGE2026',
+    participantCode: studentCode,
+    englishNickname: studentName,
+    partnerSide: studentSide
+  });
 
   // Teacher Session State
   const [teacherSide, setTeacherSide] = useState<'Korea Class' | 'Taiwan Class'>('Korea Class');
