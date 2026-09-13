@@ -8,7 +8,7 @@ import {
   ROOM_CODE, TEACHER_CODES, initialRoom, initialStudents, 
   initialActivities, initialSubmissions, initialComments, initialTeacherNotes 
 } from '../mock/demoData';
-import { db, auth, isFirebaseConfigured } from '../firebase';
+import { db, auth, isFirebaseConfigured, onAuthChanged } from '../firebase';
 import { 
   doc, setDoc, getDoc, getDocs, collection, updateDoc, 
   deleteDoc, onSnapshot 
@@ -29,15 +29,68 @@ const DEFAULT_ROOM_ID = 'room-kr-tw-01';
 
 class DataService {
   private isFirestoreSyncStarted = false;
+  private isReviewerMode = false;
+  private unsubs: (() => void)[] = [];
+
+  // Reviewer in-memory mock store (completely isolated from LocalStorage and Firestore)
+  private reviewerRoom: Room | null = null;
+  private reviewerActivities: Activity[] | null = null;
+  private reviewerStudents: StudentMembership[] | null = null;
+  private reviewerSubmissions: Submission[] | null = null;
+  private reviewerComments: Comment[] | null = null;
+  private reviewerNotes: Record<string, TeacherPrivateNote> | null = null;
 
   constructor() {
-    if (this.isFirebaseMode()) {
-      this.initFirestoreSync();
+    // Only subscribe to Firestore if user is authenticated and not in reviewer mode
+    onAuthChanged((user) => {
+      if (user && !this.isReviewerMode && this.isFirebaseMode()) {
+        this.initFirestoreSync();
+      } else if (!user) {
+        this.stopFirestoreSync();
+      }
+    });
+  }
+
+  // --- Reviewer Mode Controls ---
+  public getIsReviewerMode(): boolean {
+    return this.isReviewerMode;
+  }
+
+  public setReviewerMode(enabled: boolean): void {
+    this.isReviewerMode = enabled;
+    if (enabled) {
+      this.stopFirestoreSync();
+      this.initReviewerData();
+    } else {
+      this.clearReviewerData();
+      this.stopFirestoreSync();
+      if (auth.currentUser && this.isFirebaseMode()) {
+        this.initFirestoreSync();
+      }
     }
+  }
+
+  public initReviewerData(): void {
+    this.reviewerRoom = JSON.parse(JSON.stringify(initialRoom));
+    this.reviewerActivities = JSON.parse(JSON.stringify(initialActivities));
+    this.reviewerStudents = JSON.parse(JSON.stringify(initialStudents));
+    this.reviewerSubmissions = JSON.parse(JSON.stringify(initialSubmissions));
+    this.reviewerComments = JSON.parse(JSON.stringify(initialComments));
+    this.reviewerNotes = JSON.parse(JSON.stringify(initialTeacherNotes));
+  }
+
+  public clearReviewerData(): void {
+    this.reviewerRoom = null;
+    this.reviewerActivities = null;
+    this.reviewerStudents = null;
+    this.reviewerSubmissions = null;
+    this.reviewerComments = null;
+    this.reviewerNotes = null;
   }
 
   // --- Mode Determination ---
   public isFirebaseMode(): boolean {
+    if (this.isReviewerMode) return false;
     if (!isFirebaseConfigured()) return false;
     const mode = localStorage.getItem(KEYS.APP_MODE);
     return mode !== 'demo';
@@ -72,26 +125,31 @@ class DataService {
   }
 
   // --- Firestore Real-time Sync (Subcollections) ---
-  // Initial launch DOES NOT automatically dump or duplicate LocalStorage into Firestore
-  private async initFirestoreSync() {
-    if (this.isFirestoreSyncStarted || !this.isFirebaseMode()) return;
+  public async initFirestoreSync() {
+    if (this.isReviewerMode || this.isFirestoreSyncStarted || !this.isFirebaseMode()) return;
+    if (!auth.currentUser) return; // Prevent unauthenticated subscription permission errors
     this.isFirestoreSyncStarted = true;
 
     try {
       // 1. Listen to Room: rooms/{roomId}
       const roomRef = doc(db, 'rooms', DEFAULT_ROOM_ID);
-      onSnapshot(roomRef, (snapshot) => {
+      const unsubRoom = onSnapshot(roomRef, (snapshot) => {
+        if (this.isReviewerMode) return;
         if (snapshot.exists()) {
           const remoteRoom = snapshot.data() as Room;
           this.setStorage(KEYS.ROOM, remoteRoom);
         }
       }, (err) => {
-        console.warn('Firestore room sync notice:', err.message);
+        if (!this.isReviewerMode) {
+          console.warn('Firestore room sync notice:', err.message);
+        }
       });
+      this.unsubs.push(unsubRoom);
 
       // 2. Listen to Activities: rooms/{roomId}/activities
       const activitiesCol = collection(db, 'rooms', DEFAULT_ROOM_ID, 'activities');
-      onSnapshot(activitiesCol, (snapshot) => {
+      const unsubActs = onSnapshot(activitiesCol, (snapshot) => {
+        if (this.isReviewerMode) return;
         if (!snapshot.empty) {
           const list: Activity[] = [];
           snapshot.forEach((d) => list.push(d.data() as Activity));
@@ -99,36 +157,48 @@ class DataService {
           this.setStorage(KEYS.ACTIVITIES, list);
         }
       }, (err) => {
-        console.warn('Firestore activities sync notice:', err.message);
+        if (!this.isReviewerMode) {
+          console.warn('Firestore activities sync notice:', err.message);
+        }
       });
+      this.unsubs.push(unsubActs);
 
       // 3. Listen to Submissions: rooms/{roomId}/submissions
       const subsCol = collection(db, 'rooms', DEFAULT_ROOM_ID, 'submissions');
-      onSnapshot(subsCol, (snapshot) => {
+      const unsubSubs = onSnapshot(subsCol, (snapshot) => {
+        if (this.isReviewerMode) return;
         if (!snapshot.empty) {
           const list: Submission[] = [];
           snapshot.forEach((d) => list.push(d.data() as Submission));
           this.setStorage(KEYS.SUBMISSIONS, list);
         }
       }, (err) => {
-        console.warn('Firestore submissions sync notice:', err.message);
+        if (!this.isReviewerMode) {
+          console.warn('Firestore submissions sync notice:', err.message);
+        }
       });
+      this.unsubs.push(unsubSubs);
 
       // 4. Listen to Comments: rooms/{roomId}/comments
       const cmtsCol = collection(db, 'rooms', DEFAULT_ROOM_ID, 'comments');
-      onSnapshot(cmtsCol, (snapshot) => {
+      const unsubCmts = onSnapshot(cmtsCol, (snapshot) => {
+        if (this.isReviewerMode) return;
         if (!snapshot.empty) {
           const list: Comment[] = [];
           snapshot.forEach((d) => list.push(d.data() as Comment));
           this.setStorage(KEYS.COMMENTS, list);
         }
       }, (err) => {
-        console.warn('Firestore comments sync notice:', err.message);
+        if (!this.isReviewerMode) {
+          console.warn('Firestore comments sync notice:', err.message);
+        }
       });
+      this.unsubs.push(unsubCmts);
 
       // 5. Listen to Teacher Notes: teacherPrivateNotes/{noteId}
       const notesCol = collection(db, 'teacherPrivateNotes');
-      onSnapshot(notesCol, (snapshot) => {
+      const unsubNotes = onSnapshot(notesCol, (snapshot) => {
+        if (this.isReviewerMode) return;
         if (!snapshot.empty) {
           const map: Record<string, TeacherPrivateNote> = {};
           snapshot.forEach((d) => {
@@ -138,12 +208,27 @@ class DataService {
           this.setStorage(KEYS.NOTES, map);
         }
       }, (err) => {
-        console.warn('Firestore teacher notes sync notice:', err.message);
+        if (!this.isReviewerMode) {
+          console.warn('Firestore teacher notes sync notice:', err.message);
+        }
       });
+      this.unsubs.push(unsubNotes);
 
     } catch (e) {
-      console.warn('Firestore connection initialized in offline-resilient mode:', e);
+      if (!this.isReviewerMode) {
+        console.warn('Firestore connection initialized in offline-resilient mode:', e);
+      }
     }
+  }
+
+  public stopFirestoreSync(): void {
+    this.unsubs.forEach(unsub => {
+      try {
+        unsub();
+      } catch {}
+    });
+    this.unsubs = [];
+    this.isFirestoreSyncStarted = false;
   }
 
   // --- Audit Trail Logging (Strict: Only Teachers and Admins write to auditLogs) ---
@@ -154,8 +239,8 @@ class DataService {
     details?: string,
     role: UserRole = 'teacher'
   ): void {
-    // Security enforcement: Anonymous students are strictly forbidden from writing to auditLogs!
-    if (role === 'student') return;
+    // Security enforcement: Anonymous students and reviewer mode are strictly forbidden from writing to auditLogs!
+    if (this.isReviewerMode || role === 'student') return;
 
     const currentUser = auth.currentUser;
     const logItem = {
@@ -229,7 +314,7 @@ class DataService {
     participantCode: string, 
     englishNickname: string
   ): Promise<boolean> {
-    if (!this.isFirebaseMode() || !auth.currentUser) return true;
+    if (this.isReviewerMode || !this.isFirebaseMode() || !auth.currentUser) return true;
     try {
       const cleanCode = participantCode.trim().toUpperCase();
       const pDocRef = doc(db, 'rooms', DEFAULT_ROOM_ID, 'participants', `p-${cleanCode}`);
@@ -272,6 +357,10 @@ class DataService {
 
   // --- Room ---
   public getRoom(): Room {
+    if (this.isReviewerMode) {
+      if (!this.reviewerRoom) this.initReviewerData();
+      return JSON.parse(JSON.stringify(this.reviewerRoom!));
+    }
     return this.getStorage<Room>(KEYS.ROOM, initialRoom);
   }
 
@@ -283,6 +372,12 @@ class DataService {
       room.partnerBStatus = newStatus;
     }
     room.lastUpdated = 'Just now';
+
+    if (this.isReviewerMode) {
+      this.reviewerRoom = room;
+      return room;
+    }
+
     this.setStorage(KEYS.ROOM, room);
 
     if (this.isFirebaseMode()) {
@@ -297,6 +392,10 @@ class DataService {
 
   // --- Students (Local whitelist roster) ---
   public getStudents(): StudentMembership[] {
+    if (this.isReviewerMode) {
+      if (!this.reviewerStudents) this.initReviewerData();
+      return JSON.parse(JSON.stringify(this.reviewerStudents!));
+    }
     return this.getStorage<StudentMembership[]>(KEYS.STUDENTS, initialStudents);
   }
 
@@ -306,7 +405,9 @@ class DataService {
 
   // --- Activities ---
   public getActivities(includeArchived = false, includeDeleted = false): Activity[] {
-    const all = this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities);
+    const all = this.isReviewerMode
+      ? (this.reviewerActivities || (this.initReviewerData(), this.reviewerActivities!))
+      : this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities);
     return all.filter(a => {
       if (!includeDeleted && a.isDeleted) return false;
       if (!includeArchived && a.status === 'archived') return false;
@@ -315,11 +416,10 @@ class DataService {
   }
 
   public getActivityById(id: string): Activity | undefined {
-    return this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities).find(a => a.id === id && !a.isDeleted);
+    return this.getActivities(true, true).find(a => a.id === id && !a.isDeleted);
   }
 
   public createActivity(activity: Omit<Activity, 'id' | 'roomId' | 'createdAt' | 'updatedAt'>): Activity {
-    const activities = this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities);
     const dueTime = activity.dueDate ? new Date(activity.dueDate + 'T23:59:59Z').getTime() : Date.now() + 7 * 86400000;
     
     const newAct: Activity & { dueEpochMs: number } = {
@@ -331,6 +431,14 @@ class DataService {
       createdAt: new Date().toISOString().split('T')[0],
       updatedAt: new Date().toISOString().split('T')[0],
     };
+
+    if (this.isReviewerMode) {
+      if (!this.reviewerActivities) this.initReviewerData();
+      this.reviewerActivities!.unshift(newAct);
+      return newAct;
+    }
+
+    const activities = this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities);
     activities.unshift(newAct);
     this.setStorage(KEYS.ACTIVITIES, activities);
 
@@ -345,6 +453,18 @@ class DataService {
   }
 
   public updateActivity(id: string, updates: Partial<Activity>): Activity | null {
+    if (this.isReviewerMode) {
+      if (!this.reviewerActivities) this.initReviewerData();
+      const idx = this.reviewerActivities!.findIndex(a => a.id === id);
+      if (idx === -1) return null;
+      this.reviewerActivities![idx] = {
+        ...this.reviewerActivities![idx],
+        ...updates,
+        updatedAt: new Date().toISOString().split('T')[0]
+      };
+      return this.reviewerActivities![idx];
+    }
+
     const activities = this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities);
     const idx = activities.findIndex(a => a.id === id);
     if (idx === -1) return null;
@@ -387,6 +507,13 @@ class DataService {
       createdAt: new Date().toISOString().split('T')[0],
       updatedAt: new Date().toISOString().split('T')[0]
     };
+
+    if (this.isReviewerMode) {
+      if (!this.reviewerActivities) this.initReviewerData();
+      this.reviewerActivities!.unshift(dup);
+      return dup;
+    }
+
     const activities = this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities);
     activities.unshift(dup);
     this.setStorage(KEYS.ACTIVITIES, activities);
@@ -415,7 +542,7 @@ class DataService {
 
   // --- Deletion & Trash Policies ---
   public canDeleteActivity(id: string): { canDelete: boolean; reason: string } {
-    const act = this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities).find(a => a.id === id);
+    const act = this.getActivityById(id);
     if (!act) {
       return { canDelete: false, reason: '존재하지 않는 활동입니다.' };
     }
@@ -465,11 +592,25 @@ class DataService {
   }
 
   public getTrashActivities(): Activity[] {
-    const all = this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities);
+    const all = this.isReviewerMode
+      ? (this.reviewerActivities || (this.initReviewerData(), this.reviewerActivities!))
+      : this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities);
     return all.filter(a => a.isDeleted === true);
   }
 
   public restoreTrashActivity(id: string, restoredBy: string): { success: boolean; message: string } {
+    if (this.isReviewerMode) {
+      if (!this.reviewerActivities) this.initReviewerData();
+      const act = this.reviewerActivities!.find(a => a.id === id && a.isDeleted);
+      if (!act) return { success: false, message: '휴지통에서 해당 활동을 찾을 수 없습니다.' };
+      act.isDeleted = false;
+      act.deletedAt = undefined;
+      act.deletedBy = undefined;
+      act.deletionReason = undefined;
+      act.updatedAt = new Date().toISOString().split('T')[0];
+      return { success: true, message: '활동이 정상적으로 복원되었습니다.' };
+    }
+
     const activities = this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities);
     const act = activities.find(a => a.id === id && a.isDeleted);
     if (!act) {
@@ -502,7 +643,9 @@ class DataService {
 
   // --- Submissions (Student Writing / Polls / QA) ---
   public getSubmissions(activityId?: string): Submission[] {
-    const all = this.getStorage<Submission[]>(KEYS.SUBMISSIONS, initialSubmissions);
+    const all = this.isReviewerMode
+      ? (this.reviewerSubmissions || (this.initReviewerData(), this.reviewerSubmissions!))
+      : this.getStorage<Submission[]>(KEYS.SUBMISSIONS, initialSubmissions);
     const valid = all.filter(s => !s.isDeleted);
     if (!activityId) return valid;
     return valid.filter(s => s.activityId === activityId);
@@ -513,7 +656,6 @@ class DataService {
   }
 
   public createSubmission(sub: Omit<Submission, 'id' | 'submittedAt' | 'likesCount' | 'likedBy' | 'isHidden' | 'isApproved'>): Submission {
-    const subs = this.getStorage<Submission[]>(KEYS.SUBMISSIONS, initialSubmissions);
     const participantCodeClean = sub.participantCode.trim().toUpperCase();
     const newSub: Submission & { roomId: string; participantId: string; authorUid: string } = {
       ...sub,
@@ -528,6 +670,14 @@ class DataService {
       isHidden: false,
       isDeleted: false
     };
+
+    if (this.isReviewerMode) {
+      if (!this.reviewerSubmissions) this.initReviewerData();
+      this.reviewerSubmissions!.unshift(newSub);
+      return newSub;
+    }
+
+    const subs = this.getStorage<Submission[]>(KEYS.SUBMISSIONS, initialSubmissions);
     subs.unshift(newSub);
     this.setStorage(KEYS.SUBMISSIONS, subs);
 
@@ -545,6 +695,18 @@ class DataService {
     updates: Partial<Submission>, 
     requesterCode?: string
   ): { success: boolean; submission?: Submission; message?: string } {
+    if (this.isReviewerMode) {
+      if (!this.reviewerSubmissions) this.initReviewerData();
+      const idx = this.reviewerSubmissions!.findIndex(s => s.id === id);
+      if (idx === -1) return { success: false, message: '제출물을 찾을 수 없습니다.' };
+      this.reviewerSubmissions![idx] = {
+        ...this.reviewerSubmissions![idx],
+        ...updates,
+        updatedAt: new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
+      };
+      return { success: true, submission: this.reviewerSubmissions![idx] };
+    }
+
     const subs = this.getStorage<Submission[]>(KEYS.SUBMISSIONS, initialSubmissions);
     const idx = subs.findIndex(s => s.id === id);
     if (idx === -1) return { success: false, message: '제출물을 찾을 수 없습니다.' };
@@ -588,6 +750,27 @@ class DataService {
    * Likes: saved at rooms/{roomId}/submissions/{submissionId}/likes/{uid}
    */
   public async toggleLike(submissionId: string, participantCode: string): Promise<{ likesCount: number; isLiked: boolean }> {
+    if (this.isReviewerMode) {
+      if (!this.reviewerSubmissions) this.initReviewerData();
+      const target = this.reviewerSubmissions!.find(s => s.id === submissionId);
+      if (!target) return { likesCount: 0, isLiked: false };
+
+      const cleanCode = participantCode.toUpperCase();
+      const idx = target.likedBy.indexOf(cleanCode);
+      let isLiked = false;
+
+      if (idx >= 0) {
+        target.likedBy.splice(idx, 1);
+        target.likesCount = Math.max(0, target.likesCount - 1);
+        isLiked = false;
+      } else {
+        target.likedBy.push(cleanCode);
+        target.likesCount += 1;
+        isLiked = true;
+      }
+      return { likesCount: target.likesCount, isLiked };
+    }
+
     const subs = this.getStorage<Submission[]>(KEYS.SUBMISSIONS, initialSubmissions);
     const target = subs.find(s => s.id === submissionId);
     if (!target) return { likesCount: 0, isLiked: false };
@@ -635,6 +818,14 @@ class DataService {
   }
 
   public toggleHideSubmission(id: string): boolean {
+    if (this.isReviewerMode) {
+      if (!this.reviewerSubmissions) this.initReviewerData();
+      const target = this.reviewerSubmissions!.find(s => s.id === id);
+      if (!target) return false;
+      target.isHidden = !target.isHidden;
+      return target.isHidden;
+    }
+
     const subs = this.getStorage<Submission[]>(KEYS.SUBMISSIONS, initialSubmissions);
     const target = subs.find(s => s.id === id);
     if (!target) return false;
@@ -653,14 +844,15 @@ class DataService {
 
   // --- Comments ---
   public getComments(submissionId?: string): Comment[] {
-    const all = this.getStorage<Comment[]>(KEYS.COMMENTS, initialComments);
+    const all = this.isReviewerMode
+      ? (this.reviewerComments || (this.initReviewerData(), this.reviewerComments!))
+      : this.getStorage<Comment[]>(KEYS.COMMENTS, initialComments);
     const valid = all.filter(c => !c.isDeleted);
     if (!submissionId) return valid;
     return valid.filter(c => c.submissionId === submissionId);
   }
 
   public addComment(cmt: Omit<Comment, 'id' | 'createdAt' | 'isHidden'>): Comment {
-    const cmts = this.getStorage<Comment[]>(KEYS.COMMENTS, initialComments);
     const cleanCode = cmt.participantCode.trim().toUpperCase();
     const newCmt: Comment & { roomId: string; participantId: string; authorUid: string } = {
       ...cmt,
@@ -672,6 +864,14 @@ class DataService {
       isHidden: false,
       isDeleted: false
     };
+
+    if (this.isReviewerMode) {
+      if (!this.reviewerComments) this.initReviewerData();
+      this.reviewerComments!.push(newCmt);
+      return newCmt;
+    }
+
+    const cmts = this.getStorage<Comment[]>(KEYS.COMMENTS, initialComments);
     cmts.push(newCmt);
     this.setStorage(KEYS.COMMENTS, cmts);
 
@@ -685,6 +885,15 @@ class DataService {
   }
 
   public updateComment(id: string, content: string): Comment | null {
+    if (this.isReviewerMode) {
+      if (!this.reviewerComments) this.initReviewerData();
+      const idx = this.reviewerComments!.findIndex(c => c.id === id);
+      if (idx === -1) return null;
+      this.reviewerComments![idx].content = content;
+      this.reviewerComments![idx].updatedAt = new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit' });
+      return this.reviewerComments![idx];
+    }
+
     const cmts = this.getStorage<Comment[]>(KEYS.COMMENTS, initialComments);
     const idx = cmts.findIndex(c => c.id === id);
     if (idx === -1) return null;
@@ -708,6 +917,15 @@ class DataService {
     if (requesterRole === 'student') {
       return { success: false, message: '학생은 댓글을 삭제할 수 없습니다.' };
     }
+
+    if (this.isReviewerMode) {
+      if (!this.reviewerComments) this.initReviewerData();
+      const idx = this.reviewerComments!.findIndex(c => c.id === id);
+      if (idx === -1) return { success: false, message: '댓글을 찾을 수 없습니다.' };
+      this.reviewerComments![idx].isDeleted = true;
+      return { success: true, message: '댓글이 보관(삭제) 처리되었습니다.' };
+    }
+
     const cmts = this.getStorage<Comment[]>(KEYS.COMMENTS, initialComments);
     const idx = cmts.findIndex(c => c.id === id);
     if (idx === -1) return { success: false, message: '댓글을 찾을 수 없습니다.' };
@@ -727,10 +945,28 @@ class DataService {
 
   // --- Teacher Private Notes (Confidential) ---
   public getTeacherNotes(): Record<string, TeacherPrivateNote> {
+    if (this.isReviewerMode) {
+      if (!this.reviewerNotes) this.initReviewerData();
+      return JSON.parse(JSON.stringify(this.reviewerNotes!));
+    }
     return this.getStorage<Record<string, TeacherPrivateNote>>(KEYS.NOTES, initialTeacherNotes);
   }
 
   public saveTeacherNote(membershipId: string, noteText: string): void {
+    if (this.isReviewerMode) {
+      if (!this.reviewerNotes) this.initReviewerData();
+      const noteObj: TeacherPrivateNote = {
+        id: this.reviewerNotes![membershipId]?.id || `note-${Date.now()}`,
+        roomId: DEFAULT_ROOM_ID,
+        membershipId,
+        teacherId: 'reviewer-demo-user',
+        note: noteText,
+        updatedAt: new Date().toLocaleDateString()
+      };
+      this.reviewerNotes![membershipId] = noteObj;
+      return;
+    }
+
     const notes = this.getTeacherNotes();
     const noteObj: TeacherPrivateNote = {
       id: notes[membershipId]?.id || `note-${Date.now()}`,

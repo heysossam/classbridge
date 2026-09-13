@@ -189,21 +189,19 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button
-            onClick={() => {
-              if (isReviewerMode) {
-                alert(currentLang === 'ko' ? '평가자 체험 모드에서는 데이터 내보내기가 비활성화됩니다.' : 'Data export is disabled in reviewer demo mode.');
-                return;
-              }
-              dataService.exportRoomDataAsJSON(room.id);
-            }}
-            className="btn-outline"
-            title={isReviewerMode ? '평가자 체험 모드에서는 내보내기가 비활성화됩니다.' : '활동, 과제물, 댓글, 투표 결과를 비식별화된 JSON 파일로 백업합니다.'}
-            style={{ padding: '8px 12px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px', opacity: isReviewerMode ? 0.6 : 1 }}
-          >
-            <Download size={15} />
-            <span>{currentLang === 'ko' ? '교류방 기록 내보내기' : currentLang === 'zh-TW' ? '匯出交流室紀錄' : 'Export Room Data'}</span>
-          </button>
+          {!isReviewerMode && (
+            <button
+              onClick={() => {
+                dataService.exportRoomDataAsJSON(room.id);
+              }}
+              className="btn-outline"
+              title="활동, 과제물, 댓글, 투표 결과를 비식별화된 JSON 파일로 백업합니다."
+              style={{ padding: '8px 12px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Download size={15} />
+              <span>{currentLang === 'ko' ? '교류방 기록 내보내기' : currentLang === 'zh-TW' ? '匯出交流室紀錄' : 'Export Room Data'}</span>
+            </button>
+          )}
 
           <button
             onClick={() => setIsCreatorOpen(true)}
@@ -470,14 +468,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         ? (currentLang === 'ko' ? '마감' : currentLang === 'zh-TW' ? '截止' : 'Close') 
                         : (currentLang === 'ko' ? '공개' : currentLang === 'zh-TW' ? '發布' : 'Publish')}
                     </button>
-                    <button
-                      onClick={() => handleArchive(act.id)}
-                      className="btn-outline"
-                      style={{ padding: '6px 10px', fontSize: '0.78rem', color: '#666' }}
-                    >
-                      <Archive size={13} /> {t('activity.archive')}
-                    </button>
-                    {act.status === 'draft' && (
+                    {!isReviewerMode && (
+                      <button
+                        onClick={() => handleArchive(act.id)}
+                        className="btn-outline"
+                        style={{ padding: '6px 10px', fontSize: '0.78rem', color: '#666' }}
+                      >
+                        <Archive size={13} /> {t('activity.archive')}
+                      </button>
+                    )}
+                    {!isReviewerMode && act.status === 'draft' && (
                       <button
                         onClick={() => handleDeleteAttempt(act)}
                         className="btn-outline"
@@ -666,22 +666,24 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         <span>{t('activity.restore')}</span>
                       </button>
 
-                      <button
-                        onClick={() => handleDeleteAttempt(act)}
-                        className="btn-outline"
-                        style={{ 
-                          padding: '6px 14px', 
-                          fontSize: '0.82rem', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: '4px',
-                          color: canDel ? '#DC2626' : '#9CA3AF',
-                          borderColor: canDel ? '#FCA5A5' : '#E5E7EB'
-                        }}
-                      >
-                        <Trash2 size={14} />
-                        <span>{t('activity.deletePermanent')}</span>
-                      </button>
+                      {!isReviewerMode && (
+                        <button
+                          onClick={() => handleDeleteAttempt(act)}
+                          className="btn-outline"
+                          style={{ 
+                            padding: '6px 14px', 
+                            fontSize: '0.82rem', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '4px',
+                            color: canDel ? '#DC2626' : '#9CA3AF',
+                            borderColor: canDel ? '#FCA5A5' : '#E5E7EB'
+                          }}
+                        >
+                          <Trash2 size={14} />
+                          <span>{t('activity.deletePermanent')}</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

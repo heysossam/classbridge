@@ -238,7 +238,7 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
                       display: 'flex',
                       alignItems: 'center',
                       gap: '8px',
-                      transition: 'all 0.15s ease'
+                      transition: 'background-color 0.12s ease, border-color 0.12s ease'
                     }}
                   >
                     <span className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>{act.type}</span>

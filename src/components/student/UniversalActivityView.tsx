@@ -409,7 +409,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                           background: isSelected ? 'var(--color-primary)' : '#fff',
                           color: isSelected ? '#fff' : 'var(--color-text)',
                           cursor: 'pointer',
-                          transition: 'all 0.15s ease'
+                          transition: 'background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease'
                         }}
                       >
                         {label}

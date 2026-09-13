@@ -32,8 +32,8 @@
   --shadow-lg: 0 12px 32px rgba(23, 76, 79, 0.12);
   --shadow-accent: 0 6px 20px rgba(242, 140, 120, 0.25);
 
-  --transition-fast: 0.15s ease;
-  --transition-normal: 0.25s ease;
+  --transition-fast: 0.12s ease;
+  --transition-normal: 0.15s ease;
 }
 
 * {
@@ -60,7 +60,7 @@ button {
   cursor: pointer;
   border: none;
   background: none;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 a {
@@ -299,7 +299,7 @@ a {
   justify-content: center;
   z-index: 100;
   padding: 20px;
-  animation: fadeIn 0.2s ease;
+  animation: fadeIn 0.12s ease;
 }
 
 .modal-content {
@@ -312,7 +312,7 @@ a {
   box-shadow: var(--shadow-lg);
   position: relative;
   padding: 28px;
-  animation: slideUp 0.25s ease;
+  animation: slideUp 0.12s ease;
 }
 
 @keyframes fadeIn {

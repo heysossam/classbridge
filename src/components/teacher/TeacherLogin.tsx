@@ -322,7 +322,7 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({
                 justifyContent: 'center',
                 gap: '12px',
                 boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-                transition: 'all 0.2s ease'
+                transition: 'background-color 0.12s ease, box-shadow 0.12s ease'
               }}
             >
               <svg width="20" height="20" viewBox="0 0 24 24">

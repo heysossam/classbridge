@@ -143,7 +143,7 @@ export const DangerousDeleteModal: React.FC<DangerousDeleteModalProps> = ({
               background: isMatched ? '#DC2626' : '#E5E7EB',
               color: isMatched ? '#fff' : '#9CA3AF',
               cursor: isMatched ? 'pointer' : 'not-allowed',
-              transition: 'all 0.2s ease'
+              transition: 'background-color 0.12s ease, color 0.12s ease'
             }}
           >
             <Trash2 size={16} />

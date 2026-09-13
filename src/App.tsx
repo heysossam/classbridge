@@ -25,6 +25,12 @@ export default function App() {
   const searchParams = new URLSearchParams(window.location.search);
   const initialLang = (searchParams.get('lang') as Language) || 'ko';
   
+  // Reviewer URL query check: synchronous initialization
+  const isReviewerUrl = searchParams.get('reviewer') === 'true' || searchParams.get('mode') === 'reviewer';
+  if (isReviewerUrl && !dataService.getIsReviewerMode()) {
+    dataService.setReviewerMode(true);
+  }
+
   // Teacher session from current browser session
   const savedTeacherSide = (sessionStorage.getItem('cb_teacher_side') as 'Korea Class' | 'Taiwan Class') || null;
   const isTeacherSavedAuth = !!savedTeacherSide;
@@ -36,21 +42,23 @@ export default function App() {
   // Firebase Authentication (Custom Claims) and Firestore Security Rules.
   const requestedViewParam = searchParams.get('view');
   const isDirectAdminAccess = requestedViewParam === 'admin';
-  const isDirectTeacherAccess = requestedViewParam === 'teacher_dashboard' && !isTeacherSavedAuth;
+  const isDirectTeacherAccess = requestedViewParam === 'teacher_dashboard' && !isTeacherSavedAuth && !isReviewerUrl;
 
   // If directly requesting teacher_dashboard without prior authentication, route to teacher_login
   const initialView: AppView = isDirectAdminAccess 
     ? 'start' 
     : isDirectTeacherAccess 
     ? 'teacher_login' 
+    : isReviewerUrl
+    ? 'teacher_dashboard'
     : ((requestedViewParam as AppView) || 'start');
 
   const [currentLang, setCurrentLang] = useState<Language>(initialLang);
   const [currentView, setCurrentView] = useState<AppView>(initialView);
   const [showAdminRestrictedModal, setShowAdminRestrictedModal] = useState<boolean>(isDirectAdminAccess);
-  const [isTeacherAuthenticated, setIsTeacherAuthenticated] = useState<boolean>(isTeacherSavedAuth);
+  const [isTeacherAuthenticated, setIsTeacherAuthenticated] = useState<boolean>(isTeacherSavedAuth || isReviewerUrl);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
-  const [isReviewerMode, setIsReviewerMode] = useState<boolean>(false);
+  const [isReviewerMode, setIsReviewerMode] = useState<boolean>(isReviewerUrl);
 
   // Student Session: Only restore if explicit code parameter is provided
   const studentCodeParam = searchParams.get('code');
@@ -82,11 +90,11 @@ export default function App() {
     if (currentView === 'admin' && !isAdminAuthenticated) {
       setCurrentView('start');
       setShowAdminRestrictedModal(true);
-    } else if (currentView === 'teacher_dashboard' && !isTeacherAuthenticated) {
+    } else if (currentView === 'teacher_dashboard' && !isTeacherAuthenticated && !isReviewerMode) {
       // Screen-level block: Redirect unauthenticated teacher dashboard access to login
       setCurrentView('teacher_login');
     }
-  }, [currentView, isTeacherAuthenticated, isAdminAuthenticated]);
+  }, [currentView, isTeacherAuthenticated, isAdminAuthenticated, isReviewerMode]);
 
   // URL state synchronization: keeps current view, language, and context in sync for refresh resilience
   useEffect(() => {
@@ -96,6 +104,13 @@ export default function App() {
       url.searchParams.set('view', currentView);
     } else {
       url.searchParams.delete('view');
+    }
+
+    if (isReviewerMode) {
+      url.searchParams.set('reviewer', 'true');
+    } else {
+      url.searchParams.delete('reviewer');
+      url.searchParams.delete('mode');
     }
 
     if (currentView.startsWith('student') && studentSession) {
@@ -111,7 +126,7 @@ export default function App() {
     }
 
     window.history.replaceState({}, document.title, url.pathname + url.search);
-  }, [currentView, currentLang, studentSession, selectedActivity]);
+  }, [currentView, currentLang, studentSession, selectedActivity, isReviewerMode]);
 
   // Sync initial view when direct student URL params are used
   useEffect(() => {
@@ -149,6 +164,7 @@ export default function App() {
   };
 
   const handleTeacherLoginSuccess = (side: 'Korea Class' | 'Taiwan Class') => {
+    dataService.setReviewerMode(false);
     setIsReviewerMode(false);
     setIsTeacherAuthenticated(true);
     setTeacherSide(side);
@@ -158,6 +174,7 @@ export default function App() {
 
   // Requirement 3: 안전한 평가자 체험 모드 진입
   const handleEnterReviewerMode = () => {
+    dataService.setReviewerMode(true);
     setIsReviewerMode(true);
     setIsTeacherAuthenticated(true);
     setTeacherSide('Korea Class');
@@ -175,20 +192,25 @@ export default function App() {
     setShowAdminRestrictedModal(false);
     setCurrentView('start');
 
-    // 2. sessionStorage의 현재 화면 및 역할 상태 제거
+    // 2. dataService reviewer mode 정리
+    dataService.setReviewerMode(false);
+
+    // 3. sessionStorage의 현재 화면 및 역할 상태 제거
     sessionStorage.removeItem('cb_teacher_side');
     sessionStorage.clear();
 
-    // 3. URL의 view, code, act, modal 등 화면 복원용 query parameter 제거
+    // 4. URL의 view, code, act, modal, reviewer 등 화면 복원용 query parameter 제거
     const url = new URL(window.location.href);
     url.searchParams.delete('view');
     url.searchParams.delete('code');
     url.searchParams.delete('act');
     url.searchParams.delete('modal');
+    url.searchParams.delete('reviewer');
+    url.searchParams.delete('mode');
     const cleanUrl = url.pathname + (url.searchParams.get('lang') ? `?lang=${url.searchParams.get('lang')}` : '');
     window.history.replaceState({}, document.title, cleanUrl);
 
-    // 4. 학생 익명 세션 또는 Google 세션이 있으면 적절히 signOut
+    // 5. 학생 익명 세션 또는 Google 세션이 있으면 적절히 signOut
     try {
       await logoutFirebaseUser();
     } catch (e) {
@@ -203,6 +225,7 @@ export default function App() {
         onSelectLang={setCurrentLang}
         currentRole={currentRole}
         onExitRole={handleGlobalExit}
+        isReviewerMode={isReviewerMode}
       />
 
       <main className="main-content">

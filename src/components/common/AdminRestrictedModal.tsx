@@ -103,7 +103,7 @@ export const AdminRestrictedModal: React.FC<AdminRestrictedModalProps> = ({
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
           border: '1px solid var(--color-border-light)',
           padding: '28px',
-          animation: 'fadeIn 0.2s ease-out'
+          animation: 'fadeIn 0.12s ease-out'
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>

@@ -10,6 +10,7 @@ interface HeaderProps {
   onSelectLang: (lang: Language) => void;
   currentRole: UserRole | null;
   onExitRole: () => void;
+  isReviewerMode?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -17,10 +18,12 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectLang,
   currentRole,
   onExitRole,
+  isReviewerMode = false,
 }) => {
   const t = (key: string) => getTranslation(currentLang, key);
   const isConfigured = isFirebaseConfigured();
-  const isFirebaseLive = dataService.isFirebaseMode();
+  const isReviewerActive = isReviewerMode || dataService.getIsReviewerMode();
+  const isFirebaseLive = !isReviewerActive && dataService.isFirebaseMode();
 
   return (
     <>
@@ -47,7 +50,16 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="header-actions">
             {/* Mode Badge */}
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              {isFirebaseLive ? (
+              {isReviewerActive ? (
+                <span 
+                  className="badge badge-neutral" 
+                  title="Reviewer Demo Mode Active (Read-Only Demo Data)"
+                  style={{ fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px', background: '#EFF6FF', color: '#1E40AF', borderColor: '#BFDBFE' }}
+                >
+                  <Database size={12} color="#2563EB" />
+                  <span>평가자 체험</span>
+                </span>
+              ) : isFirebaseLive ? (
                 <span 
                   className="badge badge-success" 
                   title="Firebase Firestore Cloud Real-time Synced"
