@@ -2,11 +2,14 @@ import React, { useState } from 'react';
 import { 
   Plus, Calendar, Clock, CheckCircle2, RefreshCw, ChevronRight,
   GraduationCap, Copy, Edit2, Archive, Eye, BarChart2, Filter, 
-  AlertCircle, FolderOpen, Layers, UserCheck, Trash2, Undo2, Download
+  AlertCircle, FolderOpen, Layers, UserCheck, Trash2, Undo2, Download,
+  ShieldAlert, Check, X, ShieldCheck, EyeOff
 } from 'lucide-react';
 import { Language, Room, Activity, StudentMembership, ProgressStatus } from '../../types';
 import { getTranslation } from '../../services/i18n';
 import { dataService } from '../../services/dataService';
+import { exportAssessmentToCSV } from '../../services/assessmentExport';
+import { getCategoryBadgeLabel } from '../../services/safetyModeration';
 import { ActivityCreatorModal } from './ActivityCreatorModal';
 import { StudentDetailModal } from './StudentDetailModal';
 import { StudentWorksDashboard } from './StudentWorksDashboard';
@@ -20,7 +23,7 @@ interface TeacherDashboardProps {
   isReviewerMode?: boolean;
 }
 
-type TeacherTab = 'timeline' | 'works' | 'assessment' | 'archived';
+type TeacherTab = 'timeline' | 'works' | 'assessment' | 'moderation' | 'archived';
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   currentLang,
@@ -37,6 +40,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [activities, setActivities] = useState<Activity[]>(dataService.getActivities(true));
   const [students, setStudents] = useState<StudentMembership[]>(dataService.getStudents());
   
+  // Moderation state
+  const [moderationItems, setModerationItems] = useState(() => dataService.getPendingModerationItems());
+  const [expandedTextIds, setExpandedTextIds] = useState<Record<string, boolean>>({});
+
   // Modals state
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
@@ -53,9 +60,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
   const [filterSide, setFilterSide] = useState<'All' | 'Korea Class' | 'Taiwan Class'>('All');
 
-  // Reload activities
+  // Reload activities and moderation
   const reloadActivities = () => {
     setActivities(dataService.getActivities(true));
+    setModerationItems(dataService.getPendingModerationItems());
   };
 
   // Status toggle
@@ -358,15 +366,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveTab('archived')}
+          onClick={() => setActiveTab('moderation')}
           style={{
             padding: '10px 18px',
             fontSize: '0.92rem',
             fontWeight: 700,
             background: 'none',
             border: 'none',
-            borderBottom: activeTab === 'archived' ? '3px solid var(--color-primary)' : '3px solid transparent',
-            color: activeTab === 'archived' ? 'var(--color-primary)' : 'var(--color-text-light)',
+            borderBottom: activeTab === 'moderation' ? '3px solid #D97706' : '3px solid transparent',
+            color: activeTab === 'moderation' ? '#D97706' : 'var(--color-text-muted)',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
@@ -374,9 +382,39 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             whiteSpace: 'nowrap'
           }}
         >
-          <Archive size={17} />
-          <span>{t('teacher.archivedTab')} ({archivedActivities.length})</span>
+          <ShieldAlert size={17} />
+          <span>
+            {currentLang === 'ko' ? '안전 검토함' : currentLang === 'zh-TW' ? '安全審核匣' : 'Safety Queue'}
+            {(moderationItems.submissions.length + moderationItems.comments.length) > 0 && (
+              <span style={{ marginLeft: '6px', background: '#DC2626', color: '#fff', padding: '1px 7px', borderRadius: '10px', fontSize: '0.72rem', fontWeight: 800 }}>
+                {moderationItems.submissions.length + moderationItems.comments.length}
+              </span>
+            )}
+          </span>
         </button>
+
+        {!isReviewerMode && (
+          <button
+            onClick={() => setActiveTab('archived')}
+            style={{
+              padding: '10px 18px',
+              fontSize: '0.92rem',
+              fontWeight: 700,
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === 'archived' ? '3px solid var(--color-primary)' : '3px solid transparent',
+              color: activeTab === 'archived' ? 'var(--color-primary)' : 'var(--color-text-light)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <Archive size={17} />
+            <span>{t('teacher.archivedTab')} ({archivedActivities.length})</span>
+          </button>
+        )}
       </div>
 
       {/* ========================================================== */}
@@ -526,27 +564,39 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               </p>
             </div>
 
-            <div style={{ display: 'flex', gap: '6px' }}>
-              {(['All', 'Korea Class', 'Taiwan Class'] as const).map(side => (
-                <button
-                  key={side}
-                  onClick={() => setFilterSide(side)}
-                  className="btn-outline"
-                  style={{
-                    padding: '6px 12px',
-                    fontSize: '0.8rem',
-                    fontWeight: 600,
-                    background: filterSide === side ? 'var(--color-primary)' : 'transparent',
-                    color: filterSide === side ? '#fff' : 'var(--color-text)'
-                  }}
-                >
-                  {side === 'All' 
-                    ? (currentLang === 'ko' ? '전체 34명' : currentLang === 'zh-TW' ? '全體 34人' : 'All 34') 
-                    : side === 'Korea Class' 
-                    ? (currentLang === 'ko' ? '🇰🇷 Korea 17명' : currentLang === 'zh-TW' ? '🇰🇷 韓國 17人' : '🇰🇷 Korea 17') 
-                    : (currentLang === 'ko' ? '🇹🇼 Taiwan 17명' : currentLang === 'zh-TW' ? '🇹🇼 臺灣 17人' : '🇹🇼 Taiwan 17')}
-                </button>
-              ))}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => exportAssessmentToCSV()}
+                className="btn-primary"
+                style={{ padding: '7px 14px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                title="학생별 참여 현황, 원문, 교사 피드백 및 과정중심평가 참고 평어를 UTF-8 BOM CSV 파일로 일괄 다운로드합니다."
+              >
+                <Download size={14} />
+                <span>{currentLang === 'ko' ? '평가자료 CSV 내려받기' : currentLang === 'zh-TW' ? '下載評量資料 CSV' : 'Download Assessment CSV'}</span>
+              </button>
+
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {(['All', 'Korea Class', 'Taiwan Class'] as const).map(side => (
+                  <button
+                    key={side}
+                    onClick={() => setFilterSide(side)}
+                    className="btn-outline"
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      background: filterSide === side ? 'var(--color-primary)' : 'transparent',
+                      color: filterSide === side ? '#fff' : 'var(--color-text)'
+                    }}
+                  >
+                    {side === 'All' 
+                      ? (currentLang === 'ko' ? '전체 34명' : currentLang === 'zh-TW' ? '全體 34人' : 'All 34') 
+                      : side === 'Korea Class' 
+                      ? (currentLang === 'ko' ? '🇰🇷 Korea 17명' : currentLang === 'zh-TW' ? '🇰🇷 韓國 17人' : '🇰🇷 Korea 17') 
+                      : (currentLang === 'ko' ? '🇹🇼 Taiwan 17명' : currentLang === 'zh-TW' ? '🇹🇼 臺灣 17人' : '🇹🇼 Taiwan 17')}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -603,7 +653,288 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       )}
 
       {/* ========================================================== */}
-      {/* TAB 4: 보관된 활동 (Archived Activities & Safe Deletion) */}
+      {/* TAB 4: 안전 검토함 (Safety Moderation Queue: Requirement 5) */}
+      {/* ========================================================== */}
+      {activeTab === 'moderation' && (
+        <div className="cb-card" style={{ marginBottom: '28px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ShieldAlert size={22} color="#D97706" />
+                <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--color-primary)' }}>
+                  {currentLang === 'ko' ? '안전 검토함' : currentLang === 'zh-TW' ? '安全審核匣' : 'Safety Moderation Queue'}
+                </h2>
+                <span className="badge badge-warning" style={{ fontWeight: 700 }}>
+                  {moderationItems.submissions.length + moderationItems.comments.length}건 대기
+                </span>
+              </div>
+              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                {currentLang === 'ko'
+                  ? '3개 언어(한국어·영어·번체중국어) 로컬 규칙 기반으로 감지되었거나 교사 승인 대기 중인 글을 검토합니다. (규칙 기반 탐지는 완벽하지 않으며 교사가 최종 맥락을 확인합니다)'
+                  : 'Review student posts and comments flagged by local 3-language safety rules or awaiting teacher approval. (Rule-based detection is not perfect; teachers verify context)'}
+              </p>
+            </div>
+            <button
+              onClick={() => reloadActivities()}
+              className="btn-outline"
+              style={{ padding: '6px 12px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <RefreshCw size={13} />
+              <span>{currentLang === 'ko' ? '새로고침' : 'Refresh'}</span>
+            </button>
+          </div>
+
+          {moderationItems.submissions.length === 0 && moderationItems.comments.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text-muted)' }}>
+              <ShieldCheck size={36} color="var(--color-success)" style={{ margin: '0 auto 10px' }} />
+              <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--color-primary)' }}>
+                {currentLang === 'ko' ? '검토 대기 중인 글이 없습니다.' : 'No items awaiting moderation.'}
+              </div>
+              <div style={{ fontSize: '0.85rem', marginTop: '4px' }}>
+                {currentLang === 'ko' ? '모든 학생 제출물과 댓글이 안전하게 관리되고 있습니다.' : 'All student submissions and comments are properly verified.'}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Flagged Submissions */}
+              {moderationItems.submissions.map(sub => {
+                const act = dataService.getActivityById(sub.activityId);
+                const isExpanded = !!expandedTextIds[sub.id];
+
+                return (
+                  <div
+                    key={sub.id}
+                    style={{
+                      border: '1.5px solid #FCD34D',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '16px 18px',
+                      background: '#FFFDF5',
+                      boxShadow: 'var(--shadow-sm)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                          <span className="badge" style={{ background: '#FEF3C7', color: '#92400E', fontWeight: 700, fontSize: '0.75rem' }}>
+                            제출물
+                          </span>
+                          <span className="badge badge-neutral" style={{ fontSize: '0.75rem' }}>
+                            {sub.partnerSide === 'Korea Class' ? '🇰🇷 Korea' : '🇹🇼 Taiwan'}
+                          </span>
+                          <span style={{ fontWeight: 800, color: 'var(--color-primary)', fontSize: '0.95rem' }}>
+                            {sub.englishNickname}
+                          </span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--color-text-light)' }}>
+                            ({sub.participantCode})
+                          </span>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--color-text-light)' }}>
+                            • {sub.submittedAt}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-primary)' }}>
+                          활동: {act?.title || sub.activityId}
+                        </div>
+                      </div>
+
+                      {/* Detected Categories Badges */}
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        {(sub.detectedCategories && sub.detectedCategories.length > 0) ? (
+                          sub.detectedCategories.map(cat => (
+                            <span 
+                              key={cat} 
+                              className="badge" 
+                              style={{ background: '#FEE2E2', color: '#B91C1C', fontSize: '0.72rem', fontWeight: 700, border: '1px solid #FCA5A5' }}
+                            >
+                              감지: {getCategoryBadgeLabel(cat, currentLang)}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="badge" style={{ background: '#FEF3C7', color: '#92400E', fontSize: '0.72rem', fontWeight: 600 }}>
+                            게시 전 교사 승인 대기
+                          </span>
+                        )}
+                        {sub.hiddenReason && (
+                          <span className="badge badge-neutral" style={{ fontSize: '0.72rem' }}>
+                            사유: {sub.hiddenReason}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Submission Content */}
+                    <div style={{ 
+                      background: '#fff', 
+                      border: '1px solid var(--color-border)', 
+                      borderRadius: 'var(--radius-xs)', 
+                      padding: '12px 14px', 
+                      fontSize: '0.9rem', 
+                      lineHeight: 1.5,
+                      marginBottom: '12px'
+                    }}>
+                      {sub.title && (
+                        <div style={{ fontWeight: 700, color: 'var(--color-primary)', marginBottom: '4px' }}>
+                          제목: {sub.title}
+                        </div>
+                      )}
+                      <div style={{ color: 'var(--color-text)' }}>
+                        {isExpanded ? sub.content : (sub.content.length > 120 ? `${sub.content.slice(0, 120)}...` : sub.content)}
+                      </div>
+                      {sub.content.length > 120 && (
+                        <button
+                          type="button"
+                          onClick={() => setExpandedTextIds(prev => ({ ...prev, [sub.id]: !isExpanded }))}
+                          style={{ color: 'var(--color-primary)', fontSize: '0.78rem', fontWeight: 600, marginTop: '4px', textDecoration: 'underline' }}
+                        >
+                          {isExpanded ? '원문 접기' : '원문 전체 보기'}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => {
+                          dataService.moderateSubmission(sub.id, 'approve');
+                          reloadActivities();
+                        }}
+                        className="btn-primary"
+                        style={{ padding: '6px 14px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <Check size={14} />
+                        <span>공개 승인</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          dataService.moderateSubmission(sub.id, 'request_edit', '교사 확인 필요');
+                          reloadActivities();
+                        }}
+                        className="btn-outline"
+                        style={{ padding: '6px 14px', fontSize: '0.82rem', color: '#D97706', borderColor: '#FCD34D' }}
+                      >
+                        <span>수정 요청</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          dataService.moderateSubmission(sub.id, 'keep_hidden', '상대를 불편하게 하는 표현');
+                          reloadActivities();
+                        }}
+                        className="btn-outline"
+                        style={{ padding: '6px 14px', fontSize: '0.82rem', color: '#DC2626', borderColor: '#FCA5A5' }}
+                      >
+                        <EyeOff size={14} />
+                        <span>숨김 유지</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Flagged Comments */}
+              {moderationItems.comments.map(cmt => {
+                const isExpanded = !!expandedTextIds[cmt.id];
+
+                return (
+                  <div
+                    key={cmt.id}
+                    style={{
+                      border: '1.5px solid #FCD34D',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '16px 18px',
+                      background: '#FFFDF5',
+                      boxShadow: 'var(--shadow-sm)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                          <span className="badge" style={{ background: '#E0E7FF', color: '#3730A3', fontWeight: 700, fontSize: '0.75rem' }}>
+                            댓글
+                          </span>
+                          <span className="badge badge-neutral" style={{ fontSize: '0.75rem' }}>
+                            {cmt.partnerSide === 'Korea Class' ? '🇰🇷 Korea' : '🇹🇼 Taiwan'}
+                          </span>
+                          <span style={{ fontWeight: 800, color: 'var(--color-primary)', fontSize: '0.95rem' }}>
+                            {cmt.englishNickname}
+                          </span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--color-text-light)' }}>
+                            ({cmt.participantCode})
+                          </span>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--color-text-light)' }}>
+                            • {cmt.createdAt}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        {(cmt.detectedCategories && cmt.detectedCategories.length > 0) ? (
+                          cmt.detectedCategories.map(cat => (
+                            <span 
+                              key={cat} 
+                              className="badge" 
+                              style={{ background: '#FEE2E2', color: '#B91C1C', fontSize: '0.72rem', fontWeight: 700, border: '1px solid #FCA5A5' }}
+                            >
+                              감지: {getCategoryBadgeLabel(cat, currentLang)}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="badge" style={{ background: '#FEF3C7', color: '#92400E', fontSize: '0.72rem', fontWeight: 600 }}>
+                            숨김 검토 중
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ 
+                      background: '#fff', 
+                      border: '1px solid var(--color-border)', 
+                      borderRadius: 'var(--radius-xs)', 
+                      padding: '12px 14px', 
+                      fontSize: '0.9rem', 
+                      lineHeight: 1.5,
+                      marginBottom: '12px'
+                    }}>
+                      <div style={{ color: 'var(--color-text)' }}>
+                        {isExpanded ? cmt.content : (cmt.content.length > 120 ? `${cmt.content.slice(0, 120)}...` : cmt.content)}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => {
+                          dataService.moderateComment(cmt.id, 'approve');
+                          reloadActivities();
+                        }}
+                        className="btn-primary"
+                        style={{ padding: '6px 14px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <Check size={14} />
+                        <span>공개 승인</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          dataService.moderateComment(cmt.id, 'keep_hidden', '상대를 불편하게 하는 표현');
+                          reloadActivities();
+                        }}
+                        className="btn-outline"
+                        style={{ padding: '6px 14px', fontSize: '0.82rem', color: '#DC2626', borderColor: '#FCA5A5' }}
+                      >
+                        <EyeOff size={14} />
+                        <span>숨김 유지</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================== */}
+      {/* TAB 5: 보관된 활동 (Archived Activities & Safe Deletion) */}
       {/* ========================================================== */}
       {activeTab === 'archived' && (
         <div className="cb-card">

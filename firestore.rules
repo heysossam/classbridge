@@ -109,7 +109,12 @@ service cloud.firestore {
       // 4-C. submissions/{submissionId} 학생 제출물 서브컬렉션
       // -----------------------------------------------------------------------
       match /submissions/{submissionId} {
-        allow read: if isAuthenticated();
+        // 일반 학생은 isHidden == true 또는 needs_review 상태인 타인의 원문을 읽을 수 없음
+        allow read: if isAuthenticated() && (
+          isTeacherForRoom(roomId) ||
+          resource.data.authorUid == request.auth.uid ||
+          (resource.data.isHidden != true && resource.data.moderationStatus == 'approved')
+        );
 
         // 제출물 생성 조건 엄격 집행:
         // 1. authorUid == request.auth.uid
@@ -117,6 +122,7 @@ service cloud.firestore {
         // 3. roomId와 activityId 일치
         // 4. 활동이 published 상태이고 삭제되지 않음
         // 5. 마감시각(dueEpochMs) 이전 제출
+        // 6. 학생이 제출 생성 시 moderationStatus를 approved로 위조 방지
         allow create: if isAuthenticated() &&
           request.resource.data.authorUid == request.auth.uid &&
           request.resource.data.roomId == roomId &&
@@ -125,11 +131,16 @@ service cloud.firestore {
           exists(/databases/$(database)/documents/rooms/$(roomId)/activities/$(request.resource.data.activityId)) &&
           get(/databases/$(database)/documents/rooms/$(roomId)/activities/$(request.resource.data.activityId)).data.status == 'published' &&
           get(/databases/$(database)/documents/rooms/$(roomId)/activities/$(request.resource.data.activityId)).data.isDeleted != true &&
-          request.time.toMillis() <= get(/databases/$(database)/documents/rooms/$(roomId)/activities/$(request.resource.data.activityId)).data.dueEpochMs;
+          request.time.toMillis() <= get(/databases/$(database)/documents/rooms/$(roomId)/activities/$(request.resource.data.activityId)).data.dueEpochMs &&
+          (
+            isTeacherForRoom(roomId) ||
+            request.resource.data.moderationStatus in ['needs_review', 'pending'] ||
+            (!('moderationStatus' in request.resource.data))
+          );
 
         // 제출물 수정 조건:
-        // - 작성자 본인 수정: 마감 전 + 핵심 식별자(authorUid, participantId, activityId, roomId, submittedAt) 변경 불가
-        // - 교사 수정: 학생 본문 변경 불가, 숨김(isHidden) 및 승인 상태만 조정 가능
+        // - 작성자 본인 수정: 마감 전 + 핵심 식별자 및 moderationStatus, isHidden 조작 불가
+        // - 교사 수정: 학생 본문 변경 불가, 숨김(isHidden) 및 승인/검토 상태(moderationStatus) 조정 가능
         allow update: if (
           // 학생 본인 수정
           isAuthenticated() &&
@@ -139,9 +150,11 @@ service cloud.firestore {
           request.resource.data.activityId == resource.data.activityId &&
           request.resource.data.roomId == resource.data.roomId &&
           request.resource.data.submittedAt == resource.data.submittedAt &&
+          request.resource.data.isHidden == resource.data.isHidden &&
+          request.resource.data.moderationStatus == resource.data.moderationStatus &&
           request.time.toMillis() <= get(/databases/$(database)/documents/rooms/$(roomId)/activities/$(resource.data.activityId)).data.dueEpochMs
         ) || (
-          // 교사 관리(본문 조작 금지)
+          // 교사 관리(학생 본문 조작 금지, 숨김/검토 상태 관리)
           isTeacherForRoom(roomId) &&
           request.resource.data.content == resource.data.content &&
           request.resource.data.authorUid == resource.data.authorUid
@@ -164,36 +177,64 @@ service cloud.firestore {
           // 수정은 불가
           allow update: if false;
         }
+
+        // ---------------------------------------------------------------------
+        // 4-C-2. feedback/{feedbackId} 제출물 교사 피드백 (rooms/{roomId}/submissions/{submissionId}/feedback/teacher)
+        // ---------------------------------------------------------------------
+        match /feedback/{feedbackId} {
+          // 학생은 본인 제출물에 공개(isPublished == true)된 피드백만 열람 가능, 타인 피드백 열람 불가
+          allow read: if isTeacherForRoom(roomId) || (
+            isAuthenticated() &&
+            resource.data.isPublished == true &&
+            request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)/submissions/$(submissionId)).data.authorUid
+          );
+          // 피드백 작성 및 수정은 담당 교사/admin만 가능 (학생 작성/수정 불가)
+          allow create, update: if isTeacherForRoom(roomId);
+          // 피드백 영구 삭제 절대 금지
+          allow delete: if false;
+        }
       }
 
       // -----------------------------------------------------------------------
       // 4-D. comments/{commentId} 댓글 서브컬렉션
       // -----------------------------------------------------------------------
       match /comments/{commentId} {
-        allow read: if isAuthenticated();
+        // 일반 학생은 isHidden == true 또는 needs_review 상태인 타인의 댓글 열람 불가
+        allow read: if isAuthenticated() && (
+          isTeacherForRoom(roomId) ||
+          resource.data.authorUid == request.auth.uid ||
+          (resource.data.isHidden != true && resource.data.moderationStatus == 'approved')
+        );
 
         // 댓글 생성: 승인된 참여자 본인만 가능
         allow create: if isAuthenticated() &&
           request.resource.data.authorUid == request.auth.uid &&
           request.resource.data.roomId == roomId &&
           exists(/databases/$(database)/documents/rooms/$(roomId)/participants/$(request.resource.data.participantId)) &&
-          get(/databases/$(database)/documents/rooms/$(roomId)/participants/$(request.resource.data.participantId)).data.authUid == request.auth.uid;
+          get(/databases/$(database)/documents/rooms/$(roomId)/participants/$(request.resource.data.participantId)).data.authUid == request.auth.uid &&
+          (
+            isTeacherForRoom(roomId) ||
+            request.resource.data.moderationStatus in ['needs_review', 'approved'] ||
+            (!('moderationStatus' in request.resource.data))
+          );
 
-        // 댓글 수정: 작성자 본인만 본문 수정(식별자 변경 불가) 또는 교사의 숨김 처리
+        // 댓글 수정: 작성자 본인만 본문 수정(식별자 및 isHidden/moderationStatus 조작 불가) 또는 교사의 숨김 처리
         allow update: if (
           isAuthenticated() &&
           request.auth.uid == resource.data.authorUid &&
           request.resource.data.authorUid == resource.data.authorUid &&
           request.resource.data.submissionId == resource.data.submissionId &&
           request.resource.data.roomId == resource.data.roomId &&
-          request.resource.data.createdAt == resource.data.createdAt
+          request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.isHidden == resource.data.isHidden &&
+          request.resource.data.moderationStatus == resource.data.moderationStatus
         ) || (
           isTeacherForRoom(roomId) &&
           request.resource.data.content == resource.data.content &&
           request.resource.data.authorUid == resource.data.authorUid
         );
 
-        // 댓글 영구 삭제: 절대 불가 (필요시 isHidden 또는 isDeleted 소프트 처리)
+        // 댓글 영구 삭제: 절대 불가 (필요시 isHidden 소프트 숨김 처리)
         allow delete: if false;
       }
 

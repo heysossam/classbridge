@@ -1,4 +1,4 @@
-import { Room, Activity, StudentMembership, Submission, Comment, TeacherPrivateNote } from '../types';
+import { Room, Activity, StudentMembership, Submission, Comment, TeacherPrivateNote, TeacherFeedback } from '../types';
 
 export const ROOM_CODE = 'BRIDGE2026';
 
@@ -445,8 +445,41 @@ export const initialSubmissions: Submission[] = [
     submittedAt: '2026-09-11 11:20',
     isApproved: true,
     isHidden: false,
+    moderationStatus: 'approved',
     likesCount: 3,
-    likedBy: ['K7M4', 'K5L1', 'K2R7']
+    likedBy: ['K7M4', 'K5L1', 'K2R7'],
+    writingStartTime: '2026-09-11 11:10',
+    editCount: 0,
+    pasteAttemptsCount: 0,
+    assistanceDeclaration: ['내 생각으로 직접 작성함']
+  },
+
+  // Owen (Korea) - Act 5: Demonstration item for Safe Moderation Queue
+  {
+    id: 'sub-09',
+    activityId: 'act-05',
+    membershipId: 'm-kr-04',
+    participantCode: 'K4P6',
+    englishNickname: 'Owen',
+    partnerSide: 'Korea Class',
+    type: 'writing',
+    title: 'Visit Shilin Night Market Together',
+    content: 'I want to visit Shilin Night Market with local friends! Contact me at 010-1234-5678 or add my insta @owen_kr to hang out together.',
+    language: 'en',
+    submittedAt: '2026-09-12 10:15',
+    isApproved: false,
+    isHidden: true,
+    moderationStatus: 'needs_review',
+    hiddenReason: '개인정보 포함 가능성',
+    hiddenAt: '2026-09-12 10:15',
+    hiddenBy: '시스템 규칙 검토',
+    detectedCategories: ['전화번호 형식', 'SNS 아이디 또는 외부 연락처 공유'],
+    likesCount: 0,
+    likedBy: [],
+    writingStartTime: '2026-09-12 10:05',
+    editCount: 1,
+    pasteAttemptsCount: 0,
+    assistanceDeclaration: ['내 생각으로 직접 작성함']
   }
 ];
 
@@ -462,7 +495,8 @@ export const initialComments: Comment[] = [
     partnerSide: 'Taiwan Class',
     content: 'Hanbok colors look so gorgeous! What color hanbok do you recommend for visitors, Sunny?',
     createdAt: '2026-09-08 14:00',
-    isHidden: false
+    isHidden: false,
+    moderationStatus: 'approved'
   },
   {
     id: 'cmt-02',
@@ -474,9 +508,44 @@ export const initialComments: Comment[] = [
     partnerSide: 'Korea Class',
     content: 'Wow, Jiufen red lanterns look magical at dusk! I really want to try taro balls when I visit Taiwan.',
     createdAt: '2026-09-09 17:10',
-    isHidden: false
+    isHidden: false,
+    moderationStatus: 'approved'
   }
 ];
+
+// Initial Teacher Feedbacks (Single feedback per submission: Requirement 3)
+export const initialTeacherFeedbacks: Record<string, TeacherFeedback> = {
+  'sub-03': {
+    id: 'teacher',
+    submissionId: 'sub-03',
+    roomId: 'room-kr-tw-01',
+    teacherUid: 'teacher-kr-01',
+    content: '북촌 한옥마을의 전통미와 한복 체험 문화를 생생하게 소개했습니다. 상대국 친구들이 이해하기 쉽게 영문 묘사를 정성껏 덧붙인 점이 훌륭합니다.',
+    createdAt: '2026-09-08 17:00',
+    updatedAt: '2026-09-08 17:00',
+    isPublished: true
+  },
+  'sub-04': {
+    id: 'teacher',
+    submissionId: 'sub-04',
+    roomId: 'room-kr-tw-01',
+    teacherUid: 'teacher-tw-01',
+    content: 'Jiufen의 붉은 홍등과 지형적 특징, 그리고 대표 간식인 타로볼을 친근하게 잘 설명해주었습니다. 영화 속 장면과의 비유도 인상적입니다.',
+    createdAt: '2026-09-09 18:30',
+    updatedAt: '2026-09-09 18:30',
+    isPublished: true
+  },
+  'sub-07': {
+    id: 'teacher',
+    submissionId: 'sub-07',
+    roomId: 'room-kr-tw-01',
+    teacherUid: 'teacher-kr-01',
+    content: '버블티를 선택한 이유와 대만 친구들의 조언을 바탕으로 한 기대감이 자연스럽게 잘 드러났습니다. 꾸준한 참여를 칭찬합니다.',
+    createdAt: '2026-09-11 14:00',
+    updatedAt: '2026-09-11 14:00',
+    isPublished: true
+  }
+};
 
 // Initial Teacher Notes
 export const initialTeacherNotes: Record<string, TeacherPrivateNote> = {

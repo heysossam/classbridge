@@ -2,11 +2,12 @@ import {
   Room, Activity, StudentMembership, Submission, Comment, TeacherPrivateNote, 
   ProgressStatus, ComprehensiveStudentEvidence, ActivityStatus,
   ActivitySummaryStats, StudentPortfolioRecord, StudentPortfolioData,
-  AuditLog, UserRole
+  AuditLog, UserRole, TeacherFeedback, HiddenReason, ModerationStatus
 } from '../types';
 import { 
   ROOM_CODE, TEACHER_CODES, initialRoom, initialStudents, 
-  initialActivities, initialSubmissions, initialComments, initialTeacherNotes 
+  initialActivities, initialSubmissions, initialComments, initialTeacherNotes,
+  initialTeacherFeedbacks
 } from '../mock/demoData';
 import { db, auth, isFirebaseConfigured, onAuthChanged } from '../firebase';
 import { 
@@ -21,6 +22,7 @@ const KEYS = {
   SUBMISSIONS: 'cb_v2_submissions',
   COMMENTS: 'cb_v2_comments',
   NOTES: 'cb_v2_notes',
+  FEEDBACKS: 'cb_v2_feedbacks',
   AUDIT_LOGS: 'cb_v2_audit_logs',
   APP_MODE: 'cb_app_mode'
 };
@@ -39,6 +41,7 @@ class DataService {
   private reviewerSubmissions: Submission[] | null = null;
   private reviewerComments: Comment[] | null = null;
   private reviewerNotes: Record<string, TeacherPrivateNote> | null = null;
+  private reviewerFeedbacks: Record<string, TeacherFeedback> | null = null;
 
   constructor() {
     // Only subscribe to Firestore if user is authenticated and not in reviewer mode
@@ -77,6 +80,7 @@ class DataService {
     this.reviewerSubmissions = JSON.parse(JSON.stringify(initialSubmissions));
     this.reviewerComments = JSON.parse(JSON.stringify(initialComments));
     this.reviewerNotes = JSON.parse(JSON.stringify(initialTeacherNotes));
+    this.reviewerFeedbacks = JSON.parse(JSON.stringify(initialTeacherFeedbacks));
   }
 
   public clearReviewerData(): void {
@@ -86,6 +90,7 @@ class DataService {
     this.reviewerSubmissions = null;
     this.reviewerComments = null;
     this.reviewerNotes = null;
+    this.reviewerFeedbacks = null;
   }
 
   // --- Mode Determination ---
@@ -655,8 +660,37 @@ class DataService {
     return this.getSubmissions().find(s => s.id === id);
   }
 
-  public createSubmission(sub: Omit<Submission, 'id' | 'submittedAt' | 'likesCount' | 'likedBy' | 'isHidden' | 'isApproved'>): Submission {
+  public createSubmission(sub: Omit<Submission, 'id' | 'submittedAt' | 'likesCount' | 'likedBy' | 'isHidden' | 'isApproved'> & {
+    detectedCategories?: string[];
+    writingStartTime?: string;
+    editCount?: number;
+    pasteAttemptsCount?: number;
+    assistanceDeclaration?: string[];
+    moderationStatus?: ModerationStatus;
+    isHidden?: boolean;
+    isApproved?: boolean;
+  }): Submission {
     const participantCodeClean = sub.participantCode.trim().toUpperCase();
+    const act = this.getActivityById(sub.activityId);
+    const hasSafetyFlag = !!(sub.detectedCategories && sub.detectedCategories.length > 0);
+    const requiresApproval = act ? (act.requireApproval ?? false) : false;
+
+    // Safety and pre-approval logic
+    const isApproved = sub.isApproved !== undefined 
+      ? sub.isApproved 
+      : (!hasSafetyFlag && !requiresApproval);
+    const isHidden = sub.isHidden !== undefined 
+      ? sub.isHidden 
+      : (hasSafetyFlag || requiresApproval);
+    const moderationStatus: ModerationStatus = sub.moderationStatus || (
+      hasSafetyFlag ? 'needs_review' : requiresApproval ? 'needs_review' : 'approved'
+    );
+    const hiddenReason: HiddenReason | undefined = hasSafetyFlag 
+      ? '교사 확인 필요' 
+      : requiresApproval 
+      ? '교사 확인 필요' 
+      : undefined;
+
     const newSub: Submission & { roomId: string; participantId: string; authorUid: string } = {
       ...sub,
       id: `sub-${Date.now()}`,
@@ -666,9 +700,17 @@ class DataService {
       submittedAt: new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }),
       likesCount: 0,
       likedBy: [],
-      isApproved: true,
-      isHidden: false,
-      isDeleted: false
+      isApproved,
+      isHidden,
+      moderationStatus,
+      hiddenReason,
+      hiddenAt: isHidden ? new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : undefined,
+      hiddenBy: hasSafetyFlag ? '시스템 규칙 검토' : requiresApproval ? '게시 전 교사 승인 대기' : undefined,
+      isDeleted: false,
+      editCount: sub.editCount ?? 0,
+      pasteAttemptsCount: sub.pasteAttemptsCount ?? 0,
+      writingStartTime: sub.writingStartTime || new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }),
+      assistanceDeclaration: sub.assistanceDeclaration || []
     };
 
     if (this.isReviewerMode) {
@@ -702,6 +744,7 @@ class DataService {
       this.reviewerSubmissions![idx] = {
         ...this.reviewerSubmissions![idx],
         ...updates,
+        editCount: (this.reviewerSubmissions![idx].editCount || 0) + 1,
         updatedAt: new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
       };
       return { success: true, submission: this.reviewerSubmissions![idx] };
@@ -730,6 +773,7 @@ class DataService {
     subs[idx] = {
       ...subs[idx],
       ...updates,
+      editCount: (subs[idx].editCount || 0) + 1,
       updatedAt: new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
     };
     this.setStorage(KEYS.SUBMISSIONS, subs);
@@ -738,6 +782,7 @@ class DataService {
       try {
         updateDoc(doc(db, 'rooms', DEFAULT_ROOM_ID, 'submissions', id), {
           ...updates,
+          editCount: subs[idx].editCount,
           updatedAt: subs[idx].updatedAt
         }).catch(() => {});
       } catch {}
@@ -817,29 +862,117 @@ class DataService {
     return { likesCount: target.likesCount, isLiked };
   }
 
-  public toggleHideSubmission(id: string): boolean {
+  // --- Post Moderation & Soft Hiding (Requirement 4 & 5) ---
+  public hideSubmission(id: string, reason: HiddenReason, hiddenBy: string = '교사'): Submission | null {
+    const nowStr = new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
+
     if (this.isReviewerMode) {
       if (!this.reviewerSubmissions) this.initReviewerData();
       const target = this.reviewerSubmissions!.find(s => s.id === id);
-      if (!target) return false;
-      target.isHidden = !target.isHidden;
-      return target.isHidden;
+      if (!target) return null;
+      target.isHidden = true;
+      target.hiddenReason = reason;
+      target.hiddenAt = nowStr;
+      target.hiddenBy = hiddenBy;
+      target.moderationStatus = 'hidden';
+      return target;
     }
 
     const subs = this.getStorage<Submission[]>(KEYS.SUBMISSIONS, initialSubmissions);
     const target = subs.find(s => s.id === id);
-    if (!target) return false;
-    target.isHidden = !target.isHidden;
+    if (!target) return null;
+
+    target.isHidden = true;
+    target.hiddenReason = reason;
+    target.hiddenAt = nowStr;
+    target.hiddenBy = hiddenBy;
+    target.moderationStatus = 'hidden';
     this.setStorage(KEYS.SUBMISSIONS, subs);
 
     if (this.isFirebaseMode()) {
       try {
-        updateDoc(doc(db, 'rooms', DEFAULT_ROOM_ID, 'submissions', id), { isHidden: target.isHidden }).catch(() => {});
+        updateDoc(doc(db, 'rooms', DEFAULT_ROOM_ID, 'submissions', id), {
+          isHidden: true,
+          hiddenReason: reason,
+          hiddenAt: nowStr,
+          hiddenBy,
+          moderationStatus: 'hidden'
+        }).catch(() => {});
       } catch {}
     }
 
-    this.logAuditAction('update', 'submission', id, `Visibility toggled to hidden=${target.isHidden}`);
-    return target.isHidden;
+    this.logAuditAction('hide', 'submission', id, `Post hidden. Reason: ${reason} (by ${hiddenBy})`);
+    return target;
+  }
+
+  public restoreSubmission(id: string, restoredBy: string = '교사'): Submission | null {
+    if (this.isReviewerMode) {
+      if (!this.reviewerSubmissions) this.initReviewerData();
+      const target = this.reviewerSubmissions!.find(s => s.id === id);
+      if (!target) return null;
+      target.isHidden = false;
+      target.hiddenReason = undefined;
+      target.hiddenAt = undefined;
+      target.hiddenBy = undefined;
+      target.moderationStatus = 'approved';
+      target.isApproved = true;
+      return target;
+    }
+
+    const subs = this.getStorage<Submission[]>(KEYS.SUBMISSIONS, initialSubmissions);
+    const target = subs.find(s => s.id === id);
+    if (!target) return null;
+
+    target.isHidden = false;
+    target.hiddenReason = undefined;
+    target.hiddenAt = undefined;
+    target.hiddenBy = undefined;
+    target.moderationStatus = 'approved';
+    target.isApproved = true;
+    this.setStorage(KEYS.SUBMISSIONS, subs);
+
+    if (this.isFirebaseMode()) {
+      try {
+        updateDoc(doc(db, 'rooms', DEFAULT_ROOM_ID, 'submissions', id), {
+          isHidden: false,
+          hiddenReason: null,
+          hiddenAt: null,
+          hiddenBy: null,
+          moderationStatus: 'approved',
+          isApproved: true
+        }).catch(() => {});
+      } catch {}
+    }
+
+    this.logAuditAction('restore', 'submission', id, `Post restored to public by ${restoredBy}`);
+    return target;
+  }
+
+  public moderateSubmission(
+    id: string, 
+    action: 'approve' | 'request_edit' | 'keep_hidden', 
+    reason?: HiddenReason, 
+    moderatorName: string = '교사'
+  ): Submission | null {
+    if (action === 'approve') {
+      return this.restoreSubmission(id, moderatorName);
+    } else if (action === 'request_edit') {
+      return this.hideSubmission(id, reason || '교사 확인 필요', moderatorName);
+    } else {
+      return this.hideSubmission(id, reason || '상대를 불편하게 하는 표현', moderatorName);
+    }
+  }
+
+  public toggleHideSubmission(id: string): boolean {
+    const sub = this.getSubmissionById(id);
+    if (!sub) return false;
+    if (sub.isHidden) {
+      this.restoreSubmission(id, '교사');
+      return false;
+    } else {
+      this.hideSubmission(id, '교사 확인 필요', '교사');
+      return true;
+    }
   }
 
   // --- Comments ---
@@ -852,16 +985,29 @@ class DataService {
     return valid.filter(c => c.submissionId === submissionId);
   }
 
-  public addComment(cmt: Omit<Comment, 'id' | 'createdAt' | 'isHidden'>): Comment {
+  public addComment(cmt: Omit<Comment, 'id' | 'createdAt' | 'isHidden'> & {
+    detectedCategories?: string[];
+    moderationStatus?: ModerationStatus;
+    hiddenReason?: HiddenReason;
+  }): Comment {
     const cleanCode = cmt.participantCode.trim().toUpperCase();
+    const hasSafetyFlag = !!(cmt.detectedCategories && cmt.detectedCategories.length > 0);
+    const isHidden = hasSafetyFlag;
+    const moderationStatus: ModerationStatus = cmt.moderationStatus || (hasSafetyFlag ? 'needs_review' : 'approved');
+    const nowStr = new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
+
     const newCmt: Comment & { roomId: string; participantId: string; authorUid: string } = {
       ...cmt,
       id: `cmt-${Date.now()}`,
       roomId: DEFAULT_ROOM_ID,
       participantId: `p-${cleanCode}`,
       authorUid: auth.currentUser?.uid || 'anon-uid',
-      createdAt: new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }),
-      isHidden: false,
+      createdAt: nowStr,
+      isHidden,
+      moderationStatus,
+      hiddenReason: hasSafetyFlag ? '교사 확인 필요' : undefined,
+      hiddenAt: hasSafetyFlag ? nowStr : undefined,
+      hiddenBy: hasSafetyFlag ? '시스템 규칙 검토' : undefined,
       isDeleted: false
     };
 
@@ -913,6 +1059,116 @@ class DataService {
     return cmts[idx];
   }
 
+  public hideComment(id: string, reason: HiddenReason, hiddenBy: string = '교사'): Comment | null {
+    const nowStr = new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
+
+    if (this.isReviewerMode) {
+      if (!this.reviewerComments) this.initReviewerData();
+      const target = this.reviewerComments!.find(c => c.id === id);
+      if (!target) return null;
+      target.isHidden = true;
+      target.hiddenReason = reason;
+      target.hiddenAt = nowStr;
+      target.hiddenBy = hiddenBy;
+      target.moderationStatus = 'hidden';
+      return target;
+    }
+
+    const cmts = this.getStorage<Comment[]>(KEYS.COMMENTS, initialComments);
+    const target = cmts.find(c => c.id === id);
+    if (!target) return null;
+
+    target.isHidden = true;
+    target.hiddenReason = reason;
+    target.hiddenAt = nowStr;
+    target.hiddenBy = hiddenBy;
+    target.moderationStatus = 'hidden';
+    this.setStorage(KEYS.COMMENTS, cmts);
+
+    if (this.isFirebaseMode()) {
+      try {
+        updateDoc(doc(db, 'rooms', DEFAULT_ROOM_ID, 'comments', id), {
+          isHidden: true,
+          hiddenReason: reason,
+          hiddenAt: nowStr,
+          hiddenBy,
+          moderationStatus: 'hidden'
+        }).catch(() => {});
+      } catch {}
+    }
+
+    this.logAuditAction('hide', 'comment', id, `Comment hidden. Reason: ${reason} (by ${hiddenBy})`);
+    return target;
+  }
+
+  public restoreComment(id: string, restoredBy: string = '교사'): Comment | null {
+    if (this.isReviewerMode) {
+      if (!this.reviewerComments) this.initReviewerData();
+      const target = this.reviewerComments!.find(c => c.id === id);
+      if (!target) return null;
+      target.isHidden = false;
+      target.hiddenReason = undefined;
+      target.hiddenAt = undefined;
+      target.hiddenBy = undefined;
+      target.moderationStatus = 'approved';
+      return target;
+    }
+
+    const cmts = this.getStorage<Comment[]>(KEYS.COMMENTS, initialComments);
+    const target = cmts.find(c => c.id === id);
+    if (!target) return null;
+
+    target.isHidden = false;
+    target.hiddenReason = undefined;
+    target.hiddenAt = undefined;
+    target.hiddenBy = undefined;
+    target.moderationStatus = 'approved';
+    this.setStorage(KEYS.COMMENTS, cmts);
+
+    if (this.isFirebaseMode()) {
+      try {
+        updateDoc(doc(db, 'rooms', DEFAULT_ROOM_ID, 'comments', id), {
+          isHidden: false,
+          hiddenReason: null,
+          hiddenAt: null,
+          hiddenBy: null,
+          moderationStatus: 'approved'
+        }).catch(() => {});
+      } catch {}
+    }
+
+    this.logAuditAction('restore', 'comment', id, `Comment restored by ${restoredBy}`);
+    return target;
+  }
+
+  public moderateComment(
+    id: string, 
+    action: 'approve' | 'request_edit' | 'keep_hidden', 
+    reason?: HiddenReason, 
+    moderatorName: string = '교사'
+  ): Comment | null {
+    if (action === 'approve') {
+      return this.restoreComment(id, moderatorName);
+    } else {
+      return this.hideComment(id, reason || '교사 확인 필요', moderatorName);
+    }
+  }
+
+  public getPendingModerationItems(): { submissions: Submission[]; comments: Comment[] } {
+    const subs = this.isReviewerMode
+      ? (this.reviewerSubmissions || (this.initReviewerData(), this.reviewerSubmissions!))
+      : this.getStorage<Submission[]>(KEYS.SUBMISSIONS, initialSubmissions);
+
+    const cmts = this.isReviewerMode
+      ? (this.reviewerComments || (this.initReviewerData(), this.reviewerComments!))
+      : this.getStorage<Comment[]>(KEYS.COMMENTS, initialComments);
+
+    const pendingSubs = subs.filter(s => !s.isDeleted && (s.moderationStatus === 'needs_review' || s.isHidden || !s.isApproved));
+    const pendingCmts = cmts.filter(c => !c.isDeleted && (c.moderationStatus === 'needs_review' || c.isHidden));
+
+    return { submissions: pendingSubs, comments: pendingCmts };
+  }
+
   public deleteComment(id: string, requesterRole: UserRole = 'teacher'): { success: boolean; message: string } {
     if (requesterRole === 'student') {
       return { success: false, message: '학생은 댓글을 삭제할 수 없습니다.' };
@@ -941,6 +1197,69 @@ class DataService {
 
     this.logAuditAction('soft_delete', 'comment', id, `Comment soft-deleted by ${requesterRole}`);
     return { success: true, message: '댓글이 보관(삭제) 처리되었습니다.' };
+  }
+
+  // --- Teacher Feedback (Requirement 3: rooms/{roomId}/submissions/{submissionId}/feedback/teacher) ---
+  public getTeacherFeedback(submissionId: string): TeacherFeedback | null {
+    if (this.isReviewerMode) {
+      if (!this.reviewerFeedbacks) this.initReviewerData();
+      return this.reviewerFeedbacks![submissionId] || null;
+    }
+
+    const feedbacks = this.getStorage<Record<string, TeacherFeedback>>(KEYS.FEEDBACKS, initialTeacherFeedbacks);
+    return feedbacks[submissionId] || null;
+  }
+
+  public saveTeacherFeedback(
+    submissionId: string, 
+    content: string, 
+    isPublished: boolean = true
+  ): TeacherFeedback {
+    const nowStr = new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
+
+    if (this.isReviewerMode) {
+      if (!this.reviewerFeedbacks) this.initReviewerData();
+      const existing = this.reviewerFeedbacks![submissionId];
+      const fb: TeacherFeedback = {
+        id: 'teacher',
+        submissionId,
+        roomId: DEFAULT_ROOM_ID,
+        teacherUid: 'reviewer-demo-teacher',
+        content,
+        createdAt: existing?.createdAt || nowStr,
+        updatedAt: nowStr,
+        isPublished
+      };
+      this.reviewerFeedbacks![submissionId] = fb;
+      return fb;
+    }
+
+    const feedbacks = this.getStorage<Record<string, TeacherFeedback>>(KEYS.FEEDBACKS, initialTeacherFeedbacks);
+    const existing = feedbacks[submissionId];
+    const fb: TeacherFeedback = {
+      id: 'teacher',
+      submissionId,
+      roomId: DEFAULT_ROOM_ID,
+      teacherUid: auth.currentUser?.uid || 'teacher-auth-uid',
+      content,
+      createdAt: existing?.createdAt || nowStr,
+      updatedAt: nowStr,
+      isPublished
+    };
+    feedbacks[submissionId] = fb;
+    this.setStorage(KEYS.FEEDBACKS, feedbacks);
+
+    if (this.isFirebaseMode()) {
+      try {
+        setDoc(
+          doc(db, 'rooms', DEFAULT_ROOM_ID, 'submissions', submissionId, 'feedback', 'teacher'),
+          fb
+        ).catch(() => {});
+      } catch {}
+    }
+
+    this.logAuditAction('feedback', 'submission', submissionId, `Teacher feedback saved (isPublished: ${isPublished})`);
+    return fb;
   }
 
   // --- Teacher Private Notes (Confidential) ---

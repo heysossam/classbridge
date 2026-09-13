@@ -38,9 +38,14 @@ export const ActivityCreatorModal: React.FC<ActivityCreatorModalProps> = ({
   const [allowComments, setAllowComments] = useState(activityToEdit?.allowComments ?? true);
   const [allowLikes, setAllowLikes] = useState(activityToEdit?.allowLikes ?? true);
   const [allowPartnerResponse, setAllowPartnerResponse] = useState(activityToEdit?.allowPartnerResponse ?? true);
-  const [requireApproval, setRequireApproval] = useState(activityToEdit?.requireApproval ?? false);
+  const [requireApproval, setRequireApproval] = useState(activityToEdit?.requireApproval ?? true); // Default ON
   const [viewAfterSubmit, setViewAfterSubmit] = useState(activityToEdit?.viewAfterSubmit ?? true);
   const [visibility, setVisibility] = useState<VisibilityScope>(activityToEdit?.visibility || 'both_classes');
+
+  // Independent Writing Mode & Accessibility Settings (Requirement 8)
+  const [independentWritingMode, setIndependentWritingMode] = useState(activityToEdit?.independentWritingMode ?? true); // Default ON
+  const [allowPasteAccessibility, setAllowPasteAccessibility] = useState(activityToEdit?.allowPasteAccessibility ?? false); // Default OFF
+  const [requireAssistanceDeclaration, setRequireAssistanceDeclaration] = useState(activityToEdit?.requireAssistanceDeclaration ?? true); // Default ON
 
   // Sentence Frames
   const [sentenceFrames, setSentenceFrames] = useState<SentenceFrame[]>(
@@ -136,6 +141,9 @@ export const ActivityCreatorModal: React.FC<ActivityCreatorModalProps> = ({
       requireApproval,
       viewAfterSubmit,
       visibility,
+      independentWritingMode,
+      allowPasteAccessibility,
+      requireAssistanceDeclaration,
       pollConfig: type === 'poll' ? {
         options: pollOptions,
         allowMultipleChoices,
@@ -465,39 +473,81 @@ export const ActivityCreatorModal: React.FC<ActivityCreatorModalProps> = ({
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '8px', fontSize: '0.82rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '8px', fontSize: '0.82rem', marginBottom: '14px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <input type="checkbox" checked={allowEdit} onChange={(e) => setAllowEdit(e.target.checked)} /> 자기 글 수정 허용
+                <input type="checkbox" checked={requireApproval} onChange={(e) => setRequireApproval(e.target.checked)} />
+                <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>게시 전 교사 승인 (기본 ON)</span>
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <input type="checkbox" checked={allowComments} onChange={(e) => setAllowComments(e.target.checked)} /> 댓글 허용
+                <input type="checkbox" checked={allowComments} onChange={(e) => setAllowComments(e.target.checked)} /> 댓글 사용 (기본 ON)
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <input type="checkbox" checked={allowLikes} onChange={(e) => setAllowLikes(e.target.checked)} /> 좋아요 허용
+                <input type="checkbox" checked={allowLikes} onChange={(e) => setAllowLikes(e.target.checked)} /> 좋아요 사용 (기본 ON)
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <input type="checkbox" checked={allowEdit} onChange={(e) => setAllowEdit(e.target.checked)} /> 학생 본인 글 수정 허용
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <input type="checkbox" checked={viewAfterSubmit} onChange={(e) => setViewAfterSubmit(e.target.checked)} /> 제출 후 다른 학생 글 보기
               </label>
             </div>
-          {/* Future Photo Policy Notice */}
-          <div style={{
-            background: 'var(--bg-subtle)',
-            border: '1px solid var(--color-border-light)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '10px 14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            fontSize: '0.8rem',
-            color: 'var(--color-text-muted)'
-          }}>
-            <Camera size={16} color="var(--color-secondary)" style={{ flexShrink: 0 }} />
-            <span>
-              {currentLang === 'ko' && '학생 사진 첨부 기능은 개인정보 보호를 위해 교사 승인 방식으로 추후 제공됩니다.'}
-              {currentLang === 'en' && 'Student photo attachments will be available later with teacher approval for privacy protection.'}
-              {currentLang === 'zh-TW' && '為保護個人資料，學生照片附件功能將於日後以教師審核方式提供。'}
-            </span>
-          </div>
+
+            {/* Section 6: 스스로 쓰기 모드 (Requirement 8) */}
+            <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '12px', marginTop: '10px' }}>
+              <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '8px' }}>
+                6. 스스로 쓰기 모드 및 도구 활용 설정
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px', fontSize: '0.82rem', marginBottom: '10px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={independentWritingMode} 
+                    onChange={(e) => setIndependentWritingMode(e.target.checked)} 
+                  />
+                  <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>스스로 쓰기 모드 (기본 ON)</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={allowPasteAccessibility} 
+                    onChange={(e) => setAllowPasteAccessibility(e.target.checked)} 
+                  />
+                  <span>접근성 지원을 위한 붙여넣기 허용 (기본 OFF)</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={requireAssistanceDeclaration} 
+                    onChange={(e) => setRequireAssistanceDeclaration(e.target.checked)} 
+                  />
+                  <span>도움 도구(사전·AI 등) 사용 표시 요구 (기본 ON)</span>
+                </label>
+              </div>
+              <div style={{ fontSize: '0.76rem', color: 'var(--color-text-muted)', lineHeight: 1.4, background: '#fff', padding: '8px 10px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--color-border-light)' }}>
+                ※ 붙여넣기 제한은 학생의 자기주도적 글쓰기를 돕는 장치이며 완전한 부정행위 방지 수단이 아닙니다. AI 자동 판별을 하지 않으며, 접근성 지원이 필요한 학생을 위해 개별 허용이 가능합니다.
+              </div>
+            </div>
+
+            {/* Future Photo Policy Notice */}
+            <div style={{
+              marginTop: '12px',
+              background: 'var(--bg-subtle)',
+              border: '1px solid var(--color-border-light)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '10px 14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              fontSize: '0.8rem',
+              color: 'var(--color-text-muted)'
+            }}>
+              <Camera size={16} color="var(--color-secondary)" style={{ flexShrink: 0 }} />
+              <span>
+                {currentLang === 'ko' && '학생 사진 첨부 기능은 개인정보 보호를 위해 교사 승인 방식으로 추후 제공됩니다.'}
+                {currentLang === 'en' && 'Student photo attachments will be available later with teacher approval for privacy protection.'}
+                {currentLang === 'zh-TW' && '為保護個人資料，學生照片附件功能將於日後以教師審核方式提供。'}
+              </span>
+            </div>
         </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', paddingTop: '10px', borderTop: '1px solid var(--color-border-light)' }}>

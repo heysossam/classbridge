@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, Send, Heart, MessageSquare, CheckCircle2, Edit2, 
-  Clock, AlertCircle, BarChart2, MessageCircleQuestion, FileText, Trash2, Check
+  Clock, AlertCircle, BarChart2, MessageCircleQuestion, FileText, Trash2, Check,
+  ShieldAlert, ShieldCheck, PenTool, ClipboardX, Info
 } from 'lucide-react';
-import { Language, StudentMembership, Activity, Submission, Comment } from '../../types';
+import { Language, StudentMembership, Activity, Submission, Comment, TeacherFeedback } from '../../types';
 import { getTranslation, getLocalizedActivityContent } from '../../services/i18n';
 import { dataService } from '../../services/dataService';
+import { checkSafety, getCategoryBadgeLabel } from '../../services/safetyModeration';
 import { 
   WritingLanguage, 
   countWritingContent, 
@@ -44,6 +46,22 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
   const [selectedFrame, setSelectedFrame] = useState<string>('');
   const [formError, setFormError] = useState('');
 
+  // Independent Writing Mode & Metrics (Requirement 8)
+  const isIndependentWritingMode = activity.type === 'writing' && 
+    (activity.independentWritingMode !== false) && 
+    !activity.allowPasteAccessibility;
+
+  const [writingStartTime, setWritingStartTime] = useState<string>('');
+  const [pasteAttempts, setPasteAttempts] = useState<number>(0);
+  const [pasteWarningNotice, setPasteWarningNotice] = useState<string>('');
+  const [selectedAssistance, setSelectedAssistance] = useState<string[]>(['direct_thought']);
+
+  // Real-Time 3-Language Safety Notice (Requirement 5)
+  const [safetyNotice, setSafetyNotice] = useState<{ isClean: boolean; categories: string[]; friendlyAdvice?: string }>({ 
+    isClean: true, 
+    categories: [] 
+  });
+
   // Editing Submission State
   const [editingSubId, setEditingSubId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -64,10 +82,54 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
 
   const canSubmitMore = mySubmissions.length < activity.submissionLimit;
 
+  // Real-time safety check on input change (non-punitive gentle advice)
+  useEffect(() => {
+    const combined = `${postTitle} ${postContent} ${translationEn}`.trim();
+    if (!combined) {
+      setSafetyNotice({ isClean: true, categories: [] });
+      return;
+    }
+    const result = checkSafety(combined, writingLang);
+    setSafetyNotice({
+      isClean: result.isClean,
+      categories: result.flaggedCategories,
+      friendlyAdvice: result.friendlyAdvice
+    });
+  }, [postContent, postTitle, translationEn, writingLang]);
+
+  // Track start time on first input
+  const handleContentChange = (val: string) => {
+    if (!writingStartTime && val.trim().length > 0) {
+      setWritingStartTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    }
+    setPostContent(val);
+  };
+
+  // Paste / Drop Interceptor for Independent Writing Mode
+  const handlePasteBlock = (e: React.ClipboardEvent | React.DragEvent | any) => {
+    if (isIndependentWritingMode) {
+      e.preventDefault();
+      setPasteAttempts(prev => prev + 1);
+      setPasteWarningNotice('이 활동은 스스로 문장을 만들어 보는 활동이에요. 필요한 경우 선생님께 붙여넣기 허용을 요청하세요.');
+      setTimeout(() => {
+        setPasteWarningNotice(prev => prev === '이 활동은 스스로 문장을 만들어 보는 활동이에요. 필요한 경우 선생님께 붙여넣기 허용을 요청하세요.' ? '' : prev);
+      }, 7000);
+    }
+  };
+
+  // Beforeinput interceptor (mobile & browser contextual paste/drop)
+  const handleBeforeInput = (e: any) => {
+    if (isIndependentWritingMode) {
+      if (e.inputType === 'insertFromPaste' || e.inputType === 'insertFromDrop') {
+        e.preventDefault();
+        handlePasteBlock(e);
+      }
+    }
+  };
+
   // Filter submissions by activity visibility scope
   const visibleSubmissions = submissions.filter(sub => {
     const isMine = sub.participantCode.toUpperCase() === student.participantCode.toUpperCase();
-    if (sub.isHidden && !isMine) return false;
 
     if (activity.visibility === 'author_and_teacher') {
       return isMine;
@@ -85,7 +147,11 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
   const handleInsertFrame = (frame: string) => {
     setSelectedFrame(frame);
     if (!postContent.includes(frame.replace('___', ''))) {
-      setPostContent(prev => prev ? `${prev} ${frame}` : frame);
+      const updated = postContent ? `${postContent} ${frame}` : frame;
+      setPostContent(updated);
+      if (!writingStartTime) {
+        setWritingStartTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      }
     }
   };
 
@@ -142,6 +208,8 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
       }
     }
 
+    const safetyCheck = checkSafety(`${postTitle} ${postContent} ${translationEn}`.trim(), writingLang);
+
     dataService.createSubmission({
       activityId: activity.id,
       membershipId: student.id,
@@ -153,13 +221,21 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
       content: postContent.trim(),
       translationEn: translationEn.trim() || undefined,
       selectedOptions: activity.type === 'poll' ? selectedOptions : undefined,
-      language: writingLang
+      language: writingLang,
+      writingStartTime: writingStartTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      pasteAttemptsCount: pasteAttempts,
+      assistanceDeclaration: selectedAssistance,
+      detectedCategories: safetyCheck.flaggedCategories
     });
 
     setPostTitle('');
     setPostContent('');
     setTranslationEn('');
     setSelectedOptions([]);
+    setWritingStartTime('');
+    setPasteAttempts(0);
+    setPasteWarningNotice('');
+    setSelectedAssistance(['direct_thought']);
     setSubmissions(dataService.getSubmissions(activity.id));
   };
 
@@ -204,6 +280,8 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
     const text = commentInputs[subId];
     if (!text || !text.trim()) return;
 
+    const safetyCheck = checkSafety(text.trim());
+
     dataService.addComment({
       submissionId: subId,
       activityId: activity.id,
@@ -211,7 +289,8 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
       participantCode: student.participantCode,
       englishNickname: student.englishNickname,
       partnerSide: student.partnerSide,
-      content: text.trim()
+      content: text.trim(),
+      detectedCategories: safetyCheck.flaggedCategories
     });
 
     setCommentInputs({ ...commentInputs, [subId]: '' });
@@ -317,11 +396,42 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
       {/* Submission Form (If allowed) */}
       {canSubmitMore && (
         <div className="cb-card" style={{ marginBottom: '32px', border: '2px solid var(--color-secondary-light)' }}>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '16px' }}>
-            {activity.type === 'poll' ? (currentLang === 'ko' ? '투표 참여 및 이유 작성' : 'Cast Your Vote') :
-             activity.type === 'qa' ? (currentLang === 'ko' ? '상대국 친구에게 질문 등록' : 'Ask a Question') :
-             (currentLang === 'ko' ? '나의 글 작성하기' : 'Write Submission')}
-          </h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-primary)', margin: 0 }}>
+              {activity.type === 'poll' ? (currentLang === 'ko' ? '투표 참여 및 이유 작성' : 'Cast Your Vote') :
+               activity.type === 'qa' ? (currentLang === 'ko' ? '상대국 친구에게 질문 등록' : 'Ask a Question') :
+               (currentLang === 'ko' ? '나의 글 작성하기' : 'Write Submission')}
+            </h3>
+
+            {isIndependentWritingMode && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: 'var(--radius-xs)', padding: '3px 8px', fontSize: '0.74rem', color: '#475569', fontWeight: 600 }}>
+                <PenTool size={12} />
+                <span>스스로 쓰기 모드 적용</span>
+              </span>
+            )}
+          </div>
+
+          {/* Paste Attempt Warning Notice (Requirement 8: 비난하지 않는 부드러운 안내) */}
+          {pasteWarningNotice && (
+            <div style={{ background: '#FFFBEB', border: '1px solid #F59E0B', borderRadius: 'var(--radius-sm)', padding: '10px 14px', color: '#92400E', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+              <ClipboardX size={18} color="#D97706" style={{ flexShrink: 0 }} />
+              <span>{pasteWarningNotice}</span>
+            </div>
+          )}
+
+          {/* Real-Time Safety Guidance Banner (Requirement 5: 자동 처벌/낙인 없는 부드러운 재검토 안내) */}
+          {!safetyNotice.isClean && safetyNotice.friendlyAdvice && (
+            <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 'var(--radius-sm)', padding: '10px 14px', color: '#991B1B', fontSize: '0.85rem', fontWeight: 500, display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '14px' }}>
+              <ShieldAlert size={18} color="#DC2626" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <strong>따뜻한 배려 안내: </strong>
+                <span>{safetyNotice.friendlyAdvice}</span>
+                <div style={{ fontSize: '0.75rem', color: '#B91C1C', marginTop: '3px' }}>
+                  ※ 입력하신 내용은 교사의 안전 확인을 거친 후 친구들에게 공유됩니다.
+                </div>
+              </div>
+            </div>
+          )}
 
           {formError && (
             <div style={{ background: '#FDF2F2', border: '1px solid #F87171', borderRadius: 'var(--radius-sm)', padding: '10px', color: '#B91C1C', fontSize: '0.85rem', fontWeight: 600, marginBottom: '14px' }}>
@@ -378,7 +488,15 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                 <input
                   type="text"
                   value={postTitle}
-                  onChange={(e) => setPostTitle(e.target.value)}
+                  onChange={(e) => {
+                    if (!writingStartTime && e.target.value.trim().length > 0) {
+                      setWritingStartTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+                    }
+                    setPostTitle(e.target.value);
+                  }}
+                  onPaste={handlePasteBlock}
+                  onDrop={handlePasteBlock}
+                  onBeforeInput={handleBeforeInput}
                   placeholder="예: My Favorite Spot in Seoul"
                   style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.95rem' }}
                 />
@@ -439,7 +557,10 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
               </div>
               <textarea
                 value={postContent}
-                onChange={(e) => setPostContent(e.target.value)}
+                onChange={(e) => handleContentChange(e.target.value)}
+                onPaste={handlePasteBlock}
+                onDrop={handlePasteBlock}
+                onBeforeInput={handleBeforeInput}
                 rows={4}
                 placeholder={
                   writingLang === 'en' ? 'Write in English...' :
@@ -459,10 +580,52 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                 <textarea
                   value={translationEn}
                   onChange={(e) => setTranslationEn(e.target.value)}
+                  onPaste={handlePasteBlock}
+                  onDrop={handlePasteBlock}
+                  onBeforeInput={handleBeforeInput}
                   rows={2}
                   placeholder="상대국 친구들을 위한 영문 설명이 있다면 적어보세요..."
                   style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
                 />
+              </div>
+            )}
+
+            {/* Student Self-Declaration Checklist (Requirement 8: 도움 도구 사용 표시) */}
+            {activity.type === 'writing' && activity.requireAssistanceDeclaration !== false && (
+              <div style={{ background: '#F8FAFC', padding: '12px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '8px' }}>
+                  ✍️ 이 글을 작성할 때 도움받은 방법을 선택해 주세요:
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+                  {[
+                    { id: 'direct_thought', label: '내 생각으로 직접 작성함' },
+                    { id: 'sentence_frames', label: '수업에서 제공한 문장 틀을 활용함' },
+                    { id: 'dictionary_translation', label: '사전 또는 번역기의 도움을 받음' },
+                    { id: 'generative_ai', label: '생성형 AI의 도움을 받음' },
+                    { id: 'teacher_peer', label: '교사 또는 친구의 도움을 받음' },
+                  ].map((item) => {
+                    const isChecked = selectedAssistance.includes(item.id);
+                    return (
+                      <label key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', cursor: 'pointer', color: 'var(--color-text)' }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedAssistance([...selectedAssistance, item.id]);
+                            } else {
+                              setSelectedAssistance(selectedAssistance.filter(id => id !== item.id));
+                            }
+                          }}
+                        />
+                        <span>{item.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--color-text-muted)', marginTop: '8px' }}>
+                  ※ 도움 도구를 사용했다고 해서 감점되지 않으며, 솔직한 자기표시는 선생님의 맞춤 지도에 큰 도움이 됩니다.
+                </div>
               </div>
             )}
 
@@ -496,7 +659,10 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {visibleSubmissions.map(sub => {
               const isMine = sub.participantCode.toUpperCase() === student.participantCode.toUpperCase();
-              const subComments = allComments.filter(c => c.submissionId === sub.id && !c.isHidden);
+              const isMaskedForOther = (sub.isHidden || sub.moderationStatus === 'needs_review' || (activity.requireApproval && !sub.isApproved)) && !isMine;
+              const isPendingForAuthor = (sub.isHidden || sub.moderationStatus === 'needs_review' || (activity.requireApproval && !sub.isApproved)) && isMine;
+              const teacherFeedback = dataService.getTeacherFeedback(sub.id);
+              const subComments = allComments.filter(c => c.submissionId === sub.id && !c.isDeleted);
               const isLikedByMe = sub.likedBy.includes(student.participantCode.toUpperCase());
 
               // For QA answer, show linked question
@@ -523,148 +689,191 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                     </span>
                   </div>
 
-                  {/* QA Link notice */}
-                  {sub.type === 'qa_answer' && parentQ && (
-                    <div style={{ background: 'var(--bg-subtle)', padding: '6px 10px', borderRadius: 'var(--radius-xs)', fontSize: '0.8rem', color: 'var(--color-text-muted)', marginBottom: '8px' }}>
-                      ↳ <strong>{parentQ.englishNickname}</strong>의 질문에 대한 답변: "{parentQ.content}"
+                  {/* Pending review badge for author (Requirement 4 & 5) */}
+                  {isPendingForAuthor && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#FEF3C7', color: '#92400E', padding: '4px 10px', borderRadius: 'var(--radius-xs)', fontSize: '0.78rem', fontWeight: 600, marginBottom: '8px' }}>
+                      <ShieldAlert size={14} />
+                      <span>선생님 확인 중인 글입니다. (검토 완료 후 친구들에게 안전하게 공개됩니다)</span>
                     </div>
                   )}
 
-                  {/* Poll Option Tag */}
-                  {sub.selectedOptions && sub.selectedOptions.length > 0 && (
-                    <div style={{ marginBottom: '6px' }}>
-                      {sub.selectedOptions.map(optId => {
-                        const opt = activity.pollConfig?.options.find(o => o.id === optId);
-                        return (
-                          <span key={optId} className="badge badge-accent" style={{ fontSize: '0.78rem', marginRight: '6px' }}>
-                            선택: {opt ? opt.text : optId}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Post Title */}
-                  {sub.title && (
-                    <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '6px' }}>
-                      {sub.title}
-                    </h4>
-                  )}
-
-                  {/* Post Content or Edit Mode */}
-                  {editingSubId === sub.id ? (
-                    <div style={{ marginBottom: '10px' }}>
-                      <textarea
-                        value={editContent}
-                        onChange={(e) => setEditContent(e.target.value)}
-                        rows={3}
-                        style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.92rem' }}
-                      />
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '6px' }}>
-                        <button onClick={() => setEditingSubId(null)} className="btn-outline" style={{ padding: '4px 10px', fontSize: '0.8rem' }}>취소</button>
-                        <button onClick={() => handleSaveEditSub(sub.id)} className="btn-primary" style={{ padding: '4px 12px', fontSize: '0.8rem' }}>수정 완료</button>
-                      </div>
+                  {/* Masked Content for Other Students (Requirement 4: 일반 학생에게 원문 노출 차단) */}
+                  {isMaskedForOther ? (
+                    <div style={{ padding: '14px 16px', background: '#F8FAFC', borderRadius: 'var(--radius-sm)', border: '1px dashed #CBD5E1', color: '#64748B', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '10px', margin: '8px 0' }}>
+                      <ShieldAlert size={18} color="#94A3B8" style={{ flexShrink: 0 }} />
+                      <span style={{ fontWeight: 500 }}>이 글은 안전한 교류를 위해 교사가 확인하고 있습니다.</span>
                     </div>
                   ) : (
-                    <p style={{ fontSize: '0.92rem', color: 'var(--color-text)', lineHeight: 1.5, marginBottom: '8px' }}>
-                      {sub.content}
-                    </p>
+                    <>
+                      {/* QA Link notice */}
+                      {sub.type === 'qa_answer' && parentQ && (
+                        <div style={{ background: 'var(--bg-subtle)', padding: '6px 10px', borderRadius: 'var(--radius-xs)', fontSize: '0.8rem', color: 'var(--color-text-muted)', marginBottom: '8px' }}>
+                          ↳ <strong>{parentQ.englishNickname}</strong>의 질문에 대한 답변: "{parentQ.content}"
+                        </div>
+                      )}
+
+                      {/* Poll Option Tag */}
+                      {sub.selectedOptions && sub.selectedOptions.length > 0 && (
+                        <div style={{ marginBottom: '6px' }}>
+                          {sub.selectedOptions.map(optId => {
+                            const opt = activity.pollConfig?.options.find(o => o.id === optId);
+                            return (
+                              <span key={optId} className="badge badge-accent" style={{ fontSize: '0.78rem', marginRight: '6px' }}>
+                                선택: {opt ? opt.text : optId}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Post Title */}
+                      {sub.title && (
+                        <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '6px' }}>
+                          {sub.title}
+                        </h4>
+                      )}
+
+                      {/* Post Content or Edit Mode */}
+                      {editingSubId === sub.id ? (
+                        <div style={{ marginBottom: '10px' }}>
+                          <textarea
+                            value={editContent}
+                            onChange={(e) => setEditContent(e.target.value)}
+                            rows={3}
+                            style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.92rem' }}
+                          />
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '6px' }}>
+                            <button onClick={() => setEditingSubId(null)} className="btn-outline" style={{ padding: '4px 10px', fontSize: '0.8rem' }}>취소</button>
+                            <button onClick={() => handleSaveEditSub(sub.id)} className="btn-primary" style={{ padding: '4px 12px', fontSize: '0.8rem' }}>수정 완료</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p style={{ fontSize: '0.92rem', color: 'var(--color-text)', lineHeight: 1.5, marginBottom: '8px' }}>
+                          {sub.content}
+                        </p>
+                      )}
+
+                      {/* English Translation Toggle */}
+                      {sub.translationEn && (
+                        <div style={{ marginBottom: '10px' }}>
+                          <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
+                            <button
+                              type="button"
+                              onClick={() => setSubViewModes(prev => ({ ...prev, [sub.id]: 'original' }))}
+                              className="btn-outline"
+                              style={{
+                                padding: '3px 8px', fontSize: '0.72rem',
+                                background: subViewModes[sub.id] !== 'translation' ? 'var(--color-primary)' : 'transparent',
+                                color: subViewModes[sub.id] !== 'translation' ? '#fff' : 'var(--color-text)'
+                              }}
+                            >
+                              {t('submissionDetail.viewOriginal')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSubViewModes(prev => ({ ...prev, [sub.id]: 'translation' }))}
+                              className="btn-outline"
+                              style={{
+                                padding: '3px 8px', fontSize: '0.72rem',
+                                background: subViewModes[sub.id] === 'translation' ? 'var(--color-secondary)' : 'transparent',
+                                color: subViewModes[sub.id] === 'translation' ? '#fff' : 'var(--color-text)'
+                              }}
+                            >
+                              {t('submissionDetail.viewTranslation')}
+                            </button>
+                          </div>
+
+                          {subViewModes[sub.id] === 'translation' && (
+                            <div style={{ background: '#FAF9F5', padding: '8px 12px', borderRadius: 'var(--radius-xs)', fontSize: '0.85rem', color: 'var(--color-text-muted)', fontStyle: 'italic', border: '1px solid var(--color-border-light)' }}>
+                              Eng: "{sub.translationEn}"
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
 
-                  {/* English Translation Toggle */}
-                  {sub.translationEn && (
-                    <div style={{ marginBottom: '10px' }}>
-                      <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
-                        <button
-                          type="button"
-                          onClick={() => setSubViewModes(prev => ({ ...prev, [sub.id]: 'original' }))}
-                          className="btn-outline"
-                          style={{
-                            padding: '3px 8px', fontSize: '0.72rem',
-                            background: subViewModes[sub.id] !== 'translation' ? 'var(--color-primary)' : 'transparent',
-                            color: subViewModes[sub.id] !== 'translation' ? '#fff' : 'var(--color-text)'
-                          }}
-                        >
-                          {t('submissionDetail.viewOriginal')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSubViewModes(prev => ({ ...prev, [sub.id]: 'translation' }))}
-                          className="btn-outline"
-                          style={{
-                            padding: '3px 8px', fontSize: '0.72rem',
-                            background: subViewModes[sub.id] === 'translation' ? 'var(--color-secondary)' : 'transparent',
-                            color: subViewModes[sub.id] === 'translation' ? '#fff' : 'var(--color-text)'
-                          }}
-                        >
-                          {t('submissionDetail.viewTranslation')}
-                        </button>
+                  {/* Teacher Feedback Card (Requirement 3: 작성 본인에게만 공개, 다른 학생 열람 불가) */}
+                  {isMine && teacherFeedback && teacherFeedback.isPublished && (
+                    <div style={{
+                      marginTop: '12px',
+                      marginBottom: '10px',
+                      background: 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)',
+                      border: '1px solid #86EFAC',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '12px 14px'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: '#166534', fontSize: '0.85rem' }}>
+                          <MessageSquare size={15} />
+                          <span>선생님 피드백</span>
+                        </div>
+                        <span style={{ fontSize: '0.72rem', color: '#15803D' }}>{teacherFeedback.updatedAt}</span>
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.88rem', color: '#14532D', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                        {teacherFeedback.content}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Post Actions Bar (Only if not masked for others) */}
+                  {!isMaskedForOther && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid var(--color-border-light)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        {/* Like Button */}
+                        {activity.allowLikes && (
+                          <button
+                            onClick={() => handleLike(sub.id)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              color: isLikedByMe ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                              fontWeight: 600,
+                              fontSize: '0.85rem'
+                            }}
+                          >
+                            <Heart size={16} fill={isLikedByMe ? 'currentColor' : 'none'} />
+                            <span>{sub.likesCount}</span>
+                          </button>
+                        )}
+
+                        {/* Comments count */}
+                        {activity.allowComments && (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
+                            <MessageSquare size={16} />
+                            <span>{subComments.length}</span>
+                          </div>
+                        )}
+
+                        {/* QA Reply button */}
+                        {activity.type === 'qa' && sub.type === 'qa_question' && (
+                          <button
+                            onClick={() => setAnsweringQuestionId(answeringQuestionId === sub.id ? null : sub.id)}
+                            className="btn-outline"
+                            style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+                          >
+                            답변 작성하기
+                          </button>
+                        )}
                       </div>
 
-                      {subViewModes[sub.id] === 'translation' && (
-                        <div style={{ background: '#FAF9F5', padding: '8px 12px', borderRadius: 'var(--radius-xs)', fontSize: '0.85rem', color: 'var(--color-text-muted)', fontStyle: 'italic', border: '1px solid var(--color-border-light)' }}>
-                          Eng: "{sub.translationEn}"
-                        </div>
+                      {/* Own Post Edit Button */}
+                      {isMine && activity.allowEdit && editingSubId !== sub.id && (
+                        <button
+                          onClick={() => { setEditingSubId(sub.id); setEditContent(sub.content); }}
+                          className="btn-outline"
+                          style={{ padding: '4px 10px', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                        >
+                          <Edit2 size={13} />
+                          <span>수정</span>
+                        </button>
                       )}
                     </div>
                   )}
 
-                  {/* Post Actions Bar */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid var(--color-border-light)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      {/* Like Button */}
-                      {activity.allowLikes && (
-                        <button
-                          onClick={() => handleLike(sub.id)}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            color: isLikedByMe ? 'var(--color-accent)' : 'var(--color-text-muted)',
-                            fontWeight: 600,
-                            fontSize: '0.85rem'
-                          }}
-                        >
-                          <Heart size={16} fill={isLikedByMe ? 'currentColor' : 'none'} />
-                          <span>{sub.likesCount}</span>
-                        </button>
-                      )}
-
-                      {/* Comments count */}
-                      {activity.allowComments && (
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
-                          <MessageSquare size={16} />
-                          <span>{subComments.length}</span>
-                        </div>
-                      )}
-
-                      {/* QA Reply button */}
-                      {activity.type === 'qa' && sub.type === 'qa_question' && (
-                        <button
-                          onClick={() => setAnsweringQuestionId(answeringQuestionId === sub.id ? null : sub.id)}
-                          className="btn-outline"
-                          style={{ padding: '4px 10px', fontSize: '0.78rem' }}
-                        >
-                          답변 작성하기
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Own Post Edit Button */}
-                    {isMine && activity.allowEdit && editingSubId !== sub.id && (
-                      <button
-                        onClick={() => { setEditingSubId(sub.id); setEditContent(sub.content); }}
-                        className="btn-outline"
-                        style={{ padding: '4px 10px', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                      >
-                        <Edit2 size={13} />
-                        <span>수정</span>
-                      </button>
-                    )}
-                  </div>
-
                   {/* QA Answer Input Box */}
-                  {answeringQuestionId === sub.id && (
+                  {!isMaskedForOther && answeringQuestionId === sub.id && (
                     <div style={{ marginTop: '12px', background: 'var(--bg-subtle)', padding: '12px', borderRadius: 'var(--radius-sm)' }}>
                       <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '4px' }}>
                         {sub.englishNickname}의 질문에 답변 작성:
@@ -683,12 +892,23 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                     </div>
                   )}
 
-                  {/* Comments Section */}
-                  {activity.allowComments && (
+                  {/* Comments Section (Only if not masked for others) */}
+                  {!isMaskedForOther && activity.allowComments && (
                     <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px dashed var(--color-border-light)' }}>
                       {/* Comments List */}
                       {subComments.map(c => {
                         const isMyComment = c.participantCode.toUpperCase() === student.participantCode.toUpperCase();
+                        const isCommentMasked = (c.isHidden || c.moderationStatus === 'needs_review') && !isMyComment;
+
+                        if (isCommentMasked) {
+                          return (
+                            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 0', fontSize: '0.82rem', color: '#94A3B8', fontStyle: 'italic' }}>
+                              <ShieldAlert size={13} color="#94A3B8" />
+                              <span>이 댓글은 안전한 교류를 위해 교사가 확인하고 있습니다.</span>
+                            </div>
+                          );
+                        }
+
                         return (
                           <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '6px 0', fontSize: '0.85rem' }}>
                             <div>
@@ -707,6 +927,11 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
                                 </span>
                               ) : (
                                 <span>{c.content}</span>
+                              )}
+                              {isMyComment && (c.isHidden || c.moderationStatus === 'needs_review') && (
+                                <span style={{ marginLeft: '6px', fontSize: '0.72rem', color: '#D97706', fontWeight: 600 }}>
+                                  (교사 검토 중)
+                                </span>
                               )}
                             </div>
 

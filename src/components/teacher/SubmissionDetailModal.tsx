@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
 import { 
   X, Heart, MessageSquare, Lock, Copy, Check, Eye, EyeOff, 
-  Calendar, Globe, AlertCircle, FileText, CheckCircle2 
+  Calendar, Globe, AlertCircle, FileText, CheckCircle2, MessageCircle,
+  PenTool, ShieldAlert, Sparkles, HelpCircle, ShieldCheck
 } from 'lucide-react';
-import { Language, Submission, Activity, StudentMembership, TeacherPrivateNote } from '../../types';
+import { 
+  Language, Submission, Activity, StudentMembership, TeacherPrivateNote, 
+  TeacherFeedback, HiddenReason, ModerationStatus 
+} from '../../types';
 import { getTranslation } from '../../services/i18n';
 import { dataService } from '../../services/dataService';
 import { generateComprehensiveEvaluation } from '../../services/evaluationEngine';
+import { getCategoryBadgeLabel } from '../../services/safetyModeration';
 
 interface SubmissionDetailModalProps {
   currentLang: Language;
@@ -15,6 +20,14 @@ interface SubmissionDetailModalProps {
   onClose: () => void;
   onUpdated?: () => void;
 }
+
+const HIDDEN_REASON_OPTIONS: HiddenReason[] = [
+  '상대를 불편하게 하는 표현',
+  '개인정보 포함 가능성',
+  '수업과 무관한 내용',
+  '교사 확인 필요',
+  '기타'
+];
 
 export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
   currentLang,
@@ -25,7 +38,7 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
 }) => {
   const t = (key: string) => getTranslation(currentLang, key);
 
-  // Active submission state (may be updated like isHidden)
+  // Active submission state (may be updated like isHidden or moderationStatus)
   const [currentSub, setCurrentSub] = useState<Submission>(submission);
   const student = dataService.getStudentById(submission.membershipId) || {
     id: submission.membershipId,
@@ -42,11 +55,21 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
   // Comments for this submission
   const comments = dataService.getComments(currentSub.id);
 
-  // Teacher observation note
+  // Teacher observation note (Private, separate from feedback)
   const notes = dataService.getTeacherNotes();
   const existingNote = notes[submission.membershipId]?.note || '';
   const [noteText, setNoteText] = useState(existingNote);
   const [noteSaved, setNoteSaved] = useState(false);
+
+  // Teacher feedback state (Requirement 3: 1 teacher feedback per submission)
+  const existingFeedback = dataService.getTeacherFeedback(currentSub.id);
+  const [feedbackText, setFeedbackText] = useState(existingFeedback?.content || '');
+  const [feedbackPublished, setFeedbackPublished] = useState(existingFeedback?.isPublished ?? true);
+  const [feedbackSaved, setFeedbackSaved] = useState(false);
+
+  // Soft Hiding & Moderation state (Requirement 4)
+  const [isHideModalOpen, setIsHideModalOpen] = useState(false);
+  const [selectedHideReason, setSelectedHideReason] = useState<HiddenReason>('상대를 불편하게 하는 표현');
 
   // Assessment phrase
   const evidence = dataService.getComprehensiveEvidence(submission.membershipId);
@@ -54,14 +77,30 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
   const [editableEval, setEditableEval] = useState(evalResult.sentence);
   const [copied, setCopied] = useState(false);
 
-  // Toggle Visibility (Public vs Hidden)
-  const handleToggleHide = () => {
-    const isNowHidden = dataService.toggleHideSubmission(currentSub.id);
-    setCurrentSub({ ...currentSub, isHidden: isNowHidden });
+  // Apply Soft Hide with Reason
+  const handleApplyHide = () => {
+    const updated = dataService.hideSubmission(currentSub.id, selectedHideReason, '교사');
+    if (updated) setCurrentSub({ ...updated });
+    setIsHideModalOpen(false);
     if (onUpdated) onUpdated();
   };
 
-  // Save Teacher Note
+  // Restore to Public
+  const handleRestoreToPublic = () => {
+    const updated = dataService.restoreSubmission(currentSub.id, '교사');
+    if (updated) setCurrentSub({ ...updated });
+    if (onUpdated) onUpdated();
+  };
+
+  // Save Teacher Feedback (Requirement 3)
+  const handleSaveFeedback = () => {
+    dataService.saveTeacherFeedback(currentSub.id, feedbackText, feedbackPublished);
+    setFeedbackSaved(true);
+    setTimeout(() => setFeedbackSaved(false), 2500);
+    if (onUpdated) onUpdated();
+  };
+
+  // Save Teacher Private Note
   const handleSaveNote = () => {
     dataService.saveTeacherNote(submission.membershipId, noteText);
     setNoteSaved(true);
@@ -92,7 +131,7 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
         className="cb-card modal-content" 
         onClick={(e) => e.stopPropagation()} 
         style={{
-          width: '100%', maxWidth: '780px', maxHeight: '90vh',
+          width: '100%', maxWidth: '820px', maxHeight: '92vh',
           overflowY: 'auto', background: '#fff', borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--color-border-light)', padding: '24px',
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15)'
@@ -111,8 +150,13 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
                 {currentSub.language || 'en'}
               </span>
               <span className={`badge ${currentSub.isHidden ? 'badge-warning' : 'badge-success'}`}>
-                {currentSub.isHidden ? t('submissionDetail.statusHidden') : t('submissionDetail.statusPublic')}
+                {currentSub.isHidden ? '숨김 (비공개)' : '공개'}
               </span>
+              {currentSub.moderationStatus && currentSub.moderationStatus !== 'approved' && (
+                <span className="badge badge-warning" style={{ fontWeight: 700 }}>
+                  상태: {currentSub.moderationStatus}
+                </span>
+              )}
             </div>
             <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-primary)' }}>
               {currentSub.englishNickname} 학생의 작품 — {activity.title}
@@ -128,7 +172,7 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
           </button>
         </div>
 
-        {/* Visibility & Actions Bar */}
+        {/* Visibility & Moderation Bar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-subtle)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: 'var(--color-accent)', fontWeight: 700, fontSize: '0.9rem' }}>
@@ -141,15 +185,89 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={handleToggleHide}
-            className="btn-outline"
-            style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-          >
-            {currentSub.isHidden ? <Eye size={14} /> : <EyeOff size={14} />}
-            <span>{currentSub.isHidden ? t('submissionDetail.setPublic') : t('submissionDetail.setHidden')}</span>
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {currentSub.isHidden ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.8rem', color: '#B45309', fontWeight: 600 }}>
+                  [숨김 상태: {currentSub.hiddenReason || '교사 확인 필요'}]
+                </span>
+                <button
+                  onClick={handleRestoreToPublic}
+                  className="btn-primary"
+                  style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Eye size={14} />
+                  <span>다시 공개(복원)</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsHideModalOpen(true)}
+                className="btn-outline"
+                style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#DC2626', borderColor: '#FCA5A5' }}
+              >
+                <EyeOff size={14} />
+                <span>부적절한 글 숨기기</span>
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Hide Reason Modal Dialog */}
+        {isHideModalOpen && (
+          <div style={{
+            background: '#FFFBEB',
+            border: '1.5px solid #FCD34D',
+            borderRadius: 'var(--radius-sm)',
+            padding: '14px 16px',
+            marginBottom: '18px'
+          }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#92400E', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ShieldAlert size={16} />
+              <span>게시글 숨김 사유를 선택해 주세요 (영구 삭제 금지 · 학생 보호)</span>
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#78350F', marginBottom: '10px' }}>
+              숨김 처리 시 다른 학생들에게는 본문 대신 "이 글은 안전한 교류를 위해 교사가 확인하고 있습니다." 문구가 노출됩니다. (글 작성 학생과 교사는 원문 열람 가능)
+            </p>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+              {HIDDEN_REASON_OPTIONS.map(reason => (
+                <button
+                  key={reason}
+                  type="button"
+                  onClick={() => setSelectedHideReason(reason)}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: 'var(--radius-xs)',
+                    fontSize: '0.8rem',
+                    fontWeight: selectedHideReason === reason ? 700 : 500,
+                    border: selectedHideReason === reason ? '1.5px solid #D97706' : '1px solid #FCD34D',
+                    background: selectedHideReason === reason ? '#D97706' : '#fff',
+                    color: selectedHideReason === reason ? '#fff' : '#78350F',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                onClick={() => setIsHideModalOpen(false)}
+                className="btn-outline"
+                style={{ padding: '5px 12px', fontSize: '0.8rem' }}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleApplyHide}
+                className="btn-primary"
+                style={{ padding: '5px 14px', fontSize: '0.8rem', background: '#D97706' }}
+              >
+                숨김 적용
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Selected Poll Options or QA Context */}
         {currentSub.selectedOptions && currentSub.selectedOptions.length > 0 && (
@@ -227,6 +345,109 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
           </div>
         </div>
 
+        {/* Requirement 8: Independent Writing Process Metrics Box */}
+        <div style={{
+          background: 'linear-gradient(180deg, #F0FDF4 0%, #FFFFFF 100%)',
+          border: '1px solid #BBF7D0',
+          borderRadius: 'var(--radius-sm)',
+          padding: '14px 16px',
+          marginBottom: '22px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+            <PenTool size={16} color="var(--color-success)" />
+            <h4 style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--color-primary)' }}>
+              글쓰기 수행 과정 정보 (스스로 쓰기 모드)
+            </h4>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', fontSize: '0.82rem', marginBottom: '10px' }}>
+            <div style={{ background: '#fff', padding: '8px 10px', borderRadius: 'var(--radius-xs)', border: '1px solid #E5E7EB' }}>
+              <div style={{ color: 'var(--color-text-muted)', fontSize: '0.72rem' }}>작성 시작 시각</div>
+              <div style={{ fontWeight: 700, color: 'var(--color-primary)', marginTop: '2px' }}>{currentSub.writingStartTime || currentSub.submittedAt}</div>
+            </div>
+            <div style={{ background: '#fff', padding: '8px 10px', borderRadius: 'var(--radius-xs)', border: '1px solid #E5E7EB' }}>
+              <div style={{ color: 'var(--color-text-muted)', fontSize: '0.72rem' }}>최종 제출 시각</div>
+              <div style={{ fontWeight: 700, color: 'var(--color-primary)', marginTop: '2px' }}>{currentSub.submittedAt}</div>
+            </div>
+            <div style={{ background: '#fff', padding: '8px 10px', borderRadius: 'var(--radius-xs)', border: '1px solid #E5E7EB' }}>
+              <div style={{ color: 'var(--color-text-muted)', fontSize: '0.72rem' }}>수정 횟수</div>
+              <div style={{ fontWeight: 700, color: 'var(--color-primary)', marginTop: '2px' }}>{currentSub.editCount ?? 0}회</div>
+            </div>
+            <div style={{ background: '#fff', padding: '8px 10px', borderRadius: 'var(--radius-xs)', border: '1px solid #E5E7EB' }}>
+              <div style={{ color: 'var(--color-text-muted)', fontSize: '0.72rem' }}>붙여넣기 시도 횟수</div>
+              <div style={{ fontWeight: 700, color: (currentSub.pasteAttemptsCount || 0) > 0 ? '#D97706' : 'var(--color-primary)', marginTop: '2px' }}>
+                {currentSub.pasteAttemptsCount ?? 0}회
+              </div>
+            </div>
+          </div>
+
+          <div style={{ fontSize: '0.82rem', background: '#fff', padding: '8px 12px', borderRadius: 'var(--radius-xs)', border: '1px solid #E5E7EB', marginBottom: '8px' }}>
+            <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>학생 자기확인 (도움받은 방법): </span>
+            <span>
+              {currentSub.assistanceDeclaration && currentSub.assistanceDeclaration.length > 0 
+                ? currentSub.assistanceDeclaration.join(', ') 
+                : '내 생각으로 직접 작성함'}
+            </span>
+          </div>
+
+          <div style={{ fontSize: '0.74rem', color: 'var(--color-text-muted)', lineHeight: 1.4 }}>
+            ※ 붙여넣기 제한은 학생의 독립적인 문장 구성을 돕는 교육적 보조 장치이며, 완전한 부정행위 방지 수단이 아닙니다. AI 작성 여부를 자동 판별하지 않으며, 교사가 학생의 초안과 수업 맥락을 함께 확인합니다.
+          </div>
+        </div>
+
+        {/* Requirement 3: Teacher Feedback Section (Single feedback per submission) */}
+        <div style={{
+          background: 'linear-gradient(180deg, #F8FAFC 0%, #FFFFFF 100%)',
+          border: '1.5px solid #94A3B8',
+          borderRadius: 'var(--radius-sm)',
+          padding: '16px',
+          marginBottom: '22px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <MessageCircle size={18} color="#2563EB" />
+              <h4 style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--color-primary)' }}>
+                선생님 피드백 (학생 제출물당 1건)
+              </h4>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)' }}>
+              <input
+                type="checkbox"
+                checked={feedbackPublished}
+                onChange={(e) => setFeedbackPublished(e.target.checked)}
+              />
+              <span>학생에게 피드백 공개 (isPublished)</span>
+            </label>
+          </div>
+
+          <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: '8px' }}>
+            ※ 담당 교사 또는 관리자만 작성·수정할 수 있습니다. 학생은 본인 제출물에 공개된 피드백만 읽을 수 있으며, 타인에게는 비공개됩니다. 피드백 영구 삭제는 불가합니다.
+          </p>
+
+          <textarea
+            rows={3}
+            value={feedbackText}
+            onChange={(e) => setFeedbackText(e.target.value)}
+            placeholder="학생의 성취와 노력, 어휘 및 문장 표현에 대한 긍정적이고 구체적인 피드백을 1건 작성해 주세요..."
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--color-border)', fontSize: '0.9rem', marginBottom: '8px', lineHeight: 1.5 }}
+          />
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px' }}>
+            {feedbackSaved && (
+              <span style={{ fontSize: '0.82rem', color: 'var(--color-success)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <CheckCircle2 size={15} /> 피드백이 안전하게 저장되었습니다
+              </span>
+            )}
+            <button
+              onClick={handleSaveFeedback}
+              className="btn-primary"
+              style={{ padding: '6px 16px', fontSize: '0.85rem' }}
+            >
+              피드백 저장
+            </button>
+          </div>
+        </div>
+
         {/* Comments Section */}
         <div style={{ marginBottom: '24px' }}>
           <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -254,7 +475,7 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
           )}
         </div>
 
-        {/* Section: Teacher Observation Note (Private) */}
+        {/* Section: Teacher Observation Note (Private, completely separate from student feedback) */}
         <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: '18px', marginBottom: '22px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
             <Lock size={16} color="var(--color-secondary)" />
@@ -269,7 +490,7 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
             rows={3}
             value={noteText}
             onChange={(e) => setNoteText(e.target.value)}
-            placeholder="학생의 수행 과정, 자기표현 태도, 협력 태도를 관찰하여 메모를 작성하세요..."
+            placeholder="학생의 수행 과정, 자기표현 태도, 협력 태도를 관찰하여 비공개 메모를 작성하세요..."
             style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.9rem', marginBottom: '8px' }}
           />
           <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px' }}>

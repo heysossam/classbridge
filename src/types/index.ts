@@ -54,6 +54,11 @@ export interface Activity {
   viewAfterSubmit: boolean;
   visibility: VisibilityScope;
 
+  // Independent Writing Mode & Accessibility Settings (Requirement 8)
+  independentWritingMode?: boolean; // Default true
+  allowPasteAccessibility?: boolean; // Default false
+  requireAssistanceDeclaration?: boolean; // Default true
+
   // Poll-specific settings
   pollConfig?: {
     options: PollOption[];
@@ -83,6 +88,15 @@ export interface Activity {
   updatedAt: string;
 }
 
+export type HiddenReason = 
+  | '상대를 불편하게 하는 표현'
+  | '개인정보 포함 가능성'
+  | '수업과 무관한 내용'
+  | '교사 확인 필요'
+  | '기타';
+
+export type ModerationStatus = 'approved' | 'needs_review' | 'flagged' | 'hidden';
+
 export interface Submission {
   id: string;
   activityId: string;
@@ -103,6 +117,20 @@ export interface Submission {
   isHidden: boolean;
   likesCount: number;
   likedBy: string[]; // participantCodes
+
+  // Moderation & Safety Fields (Requirement 4 & 5)
+  moderationStatus?: ModerationStatus;
+  hiddenReason?: HiddenReason;
+  hiddenAt?: string;
+  hiddenBy?: string;
+  detectedCategories?: string[];
+
+  // Independent Writing Process Metrics (Requirement 8)
+  writingStartTime?: string;
+  editCount?: number;
+  pasteAttemptsCount?: number;
+  assistanceDeclaration?: string[];
+
   // Soft delete fields
   isDeleted?: boolean;
   deletedAt?: string;
@@ -121,10 +149,30 @@ export interface Comment {
   createdAt: string;
   updatedAt?: string;
   isHidden: boolean;
+
+  // Moderation & Safety Fields (Requirement 4 & 5)
+  moderationStatus?: ModerationStatus;
+  hiddenReason?: HiddenReason;
+  hiddenAt?: string;
+  hiddenBy?: string;
+  detectedCategories?: string[];
+
   // Soft delete fields
   isDeleted?: boolean;
   deletedAt?: string;
   deletedBy?: string;
+}
+
+// Teacher Feedback Subcollection document: rooms/{roomId}/submissions/{submissionId}/feedback/teacher
+export interface TeacherFeedback {
+  id: 'teacher';
+  submissionId: string;
+  roomId: string;
+  teacherUid: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  isPublished: boolean;
 }
 
 export interface AuditLog {
@@ -133,8 +181,8 @@ export interface AuditLog {
   userId: string;
   userEmail?: string;
   userRole: UserRole;
-  action: 'create' | 'update' | 'soft_delete' | 'restore' | 'permanent_delete' | 'login';
-  targetType: 'activity' | 'submission' | 'comment' | 'note' | 'room';
+  action: 'create' | 'update' | 'soft_delete' | 'restore' | 'permanent_delete' | 'login' | 'hide' | 'unhide' | 'moderate' | 'feedback';
+  targetType: 'activity' | 'submission' | 'comment' | 'note' | 'room' | 'feedback';
   targetId: string;
   details?: string;
 }
