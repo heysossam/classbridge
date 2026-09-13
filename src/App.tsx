@@ -24,6 +24,10 @@ export default function App() {
   const searchParams = new URLSearchParams(window.location.search);
   const initialLang = (searchParams.get('lang') as Language) || 'ko';
   
+  // Teacher session from current browser session
+  const savedTeacherSide = (sessionStorage.getItem('cb_teacher_side') as 'Korea Class' | 'Taiwan Class') || null;
+  const isTeacherSavedAuth = !!savedTeacherSide;
+
   // Direct URL admin & teacher dashboard access defense
   // NOTE: In this LocalStorage MVP, client-side route guards prevent students and unauthorized users
   // from directly entering teacher dashboards or admin screens via URL parameter manipulation (?view=...).
@@ -31,7 +35,7 @@ export default function App() {
   // Firebase Authentication (Custom Claims) and Firestore Security Rules.
   const requestedViewParam = searchParams.get('view');
   const isDirectAdminAccess = requestedViewParam === 'admin';
-  const isDirectTeacherAccess = requestedViewParam === 'teacher_dashboard';
+  const isDirectTeacherAccess = requestedViewParam === 'teacher_dashboard' && !isTeacherSavedAuth;
 
   // If directly requesting teacher_dashboard without prior authentication, route to teacher_login
   const initialView: AppView = isDirectAdminAccess 
@@ -43,7 +47,7 @@ export default function App() {
   const [currentLang, setCurrentLang] = useState<Language>(initialLang);
   const [currentView, setCurrentView] = useState<AppView>(initialView);
   const [showAdminRestrictedModal, setShowAdminRestrictedModal] = useState<boolean>(isDirectAdminAccess);
-  const [isTeacherAuthenticated, setIsTeacherAuthenticated] = useState<boolean>(false);
+  const [isTeacherAuthenticated, setIsTeacherAuthenticated] = useState<boolean>(isTeacherSavedAuth);
 
   // Student Session
   const studentCodeParam = searchParams.get('code') || 'K7M4';
@@ -56,7 +60,7 @@ export default function App() {
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(initialAct);
 
   // Teacher Session State
-  const [teacherSide, setTeacherSide] = useState<'Korea Class' | 'Taiwan Class'>('Korea Class');
+  const [teacherSide, setTeacherSide] = useState<'Korea Class' | 'Taiwan Class'>(savedTeacherSide || 'Korea Class');
 
   // Handle direct URL admin attempt cleanup
   useEffect(() => {
@@ -78,6 +82,31 @@ export default function App() {
       setCurrentView('teacher_login');
     }
   }, [currentView, isTeacherAuthenticated]);
+
+  // URL state synchronization: keeps current view, language, and context in sync for refresh resilience
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('lang', currentLang);
+    if (currentView !== 'start') {
+      url.searchParams.set('view', currentView);
+    } else {
+      url.searchParams.delete('view');
+    }
+
+    if (currentView.startsWith('student') && studentSession) {
+      url.searchParams.set('code', studentSession.participantCode);
+    } else {
+      url.searchParams.delete('code');
+    }
+
+    if (currentView === 'student_activity_detail' && selectedActivity) {
+      url.searchParams.set('act', selectedActivity.id);
+    } else {
+      url.searchParams.delete('act');
+    }
+
+    window.history.replaceState({}, document.title, url.pathname + url.search);
+  }, [currentView, currentLang, studentSession, selectedActivity]);
 
   // Sync initial view when direct student URL params are used
   useEffect(() => {
@@ -117,11 +146,13 @@ export default function App() {
   const handleTeacherLoginSuccess = (side: 'Korea Class' | 'Taiwan Class') => {
     setIsTeacherAuthenticated(true);
     setTeacherSide(side);
+    sessionStorage.setItem('cb_teacher_side', side);
     setCurrentView('teacher_dashboard');
   };
 
   const handleExitToStart = () => {
     setIsTeacherAuthenticated(false);
+    sessionStorage.removeItem('cb_teacher_side');
     setCurrentView('start');
   };
 
