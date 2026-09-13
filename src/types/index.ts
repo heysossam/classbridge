@@ -4,68 +4,117 @@ export type UserRole = 'teacher' | 'student' | 'admin';
 
 export type ProgressStatus = 'not_started' | 'in_progress' | 'completed';
 
-export interface Room {
+export type ActivityType = 'writing' | 'poll' | 'qa';
+
+export type ActivityStatus = 'draft' | 'published' | 'closed' | 'archived';
+
+export type TargetSide = 'Korea Class' | 'Taiwan Class' | 'Both';
+
+export type VisibilityScope = 'author_and_teacher' | 'my_class' | 'both_classes' | 'teachers_only';
+
+export interface SentenceFrame {
   id: string;
-  title: string;
-  joinCode: string;
-  partnerALabel: string; // 'Korea Class'
-  partnerBLabel: string; // 'Taiwan Class'
-  partnerAStatus: ProgressStatus;
-  partnerBStatus: ProgressStatus;
-  partnerANextTask: string;
-  partnerBNextTask: string;
-  overallProgress: number; // 0 ~ 100
-  nextSchedule: string;
-  currentActivityTitle: string;
-  lastUpdated: string;
+  frame: string;
+  example: string;
 }
 
-export interface StudentMembership {
+export interface PollOption {
   id: string;
-  roomId: string;
-  participantCode: string; // e.g., 'K7M4', 'T9Q2'
-  englishNickname: string; // e.g., 'Sunny', 'Leo'
-  partnerSide: 'Korea Class' | 'Taiwan Class';
-  createdAt: string;
-}
-
-export interface ActivityOption {
-  id: string;
-  title: string;
-  description: string;
-  icon: string;
-  votesCount?: number;
+  text: string;
+  targetSide?: 'Korea Class' | 'Taiwan Class' | 'Both';
 }
 
 export interface Activity {
   id: string;
   roomId: string;
   title: string;
-  instructions: string;
+  type: ActivityType;
+  instructionsKo: string;
+  instructionsEn: string;
+  instructionsZh: string;
+  startDate: string;
   dueDate: string;
-  options: ActivityOption[];
-  sentenceFrames: {
-    id: string;
-    frame: string;
-    example: string;
-  }[];
-  status: 'active' | 'closed';
+  isRequired: boolean;
+  targetSide: TargetSide;
+  status: ActivityStatus;
+  sentenceFrames: SentenceFrame[];
+  submissionLimit: number; // 1 ~ 5
+  minWordCount: number;
+  maxWordCount: number;
+  allowEdit: boolean;
+  allowComments: boolean;
+  allowLikes: boolean;
+  allowPartnerResponse: boolean;
+  requireApproval: boolean;
+  viewAfterSubmit: boolean;
+  visibility: VisibilityScope;
+
+  // Poll-specific settings
+  pollConfig?: {
+    options: PollOption[];
+    allowMultipleChoices: boolean;
+    requireReason: boolean;
+    resultsVisibility: 'immediate' | 'after_due' | 'private';
+    allowVoteChange: boolean;
+  };
+
+  // QA-specific settings
+  qaConfig?: {
+    maxQuestionsPerStudent: number;
+    questionMaxWords: number;
+    answerMaxWords: number;
+    respondentScope: 'partner_only' | 'both_classes';
+    minAnswersPerStudent: number;
+    allowAnswerEdit: boolean;
+  };
+
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface StudentResponse {
+export interface Submission {
   id: string;
-  roomId: string;
   activityId: string;
   membershipId: string;
   participantCode: string;
   englishNickname: string;
   partnerSide: 'Korea Class' | 'Taiwan Class';
-  selectedOption: string; // 'Design A', 'Design B', 'Design C'
-  sentenceFrame: string;
-  userReason: string;
-  fullStatement: string;
+  type: 'writing' | 'poll' | 'qa_question' | 'qa_answer';
+  title?: string;
+  content: string;
+  translationEn?: string;
+  selectedOptions?: string[]; // for poll
+  parentQuestionId?: string; // for qa_answer
+  language: 'ko' | 'en' | 'zh-TW' | 'other';
   submittedAt: string;
-  visibilityStatus: 'public' | 'hidden';
+  updatedAt?: string;
+  isApproved: boolean;
+  isHidden: boolean;
+  likesCount: number;
+  likedBy: string[]; // participantCodes
+}
+
+export interface Comment {
+  id: string;
+  submissionId: string;
+  activityId: string;
+  membershipId: string;
+  participantCode: string;
+  englishNickname: string;
+  partnerSide: 'Korea Class' | 'Taiwan Class';
+  content: string;
+  createdAt: string;
+  updatedAt?: string;
+  isHidden: boolean;
+}
+
+export interface StudentMembership {
+  id: string;
+  roomId: string;
+  participantCode: string;
+  englishNickname: string;
+  partnerSide: 'Korea Class' | 'Taiwan Class';
+  createdAt: string;
 }
 
 export interface TeacherPrivateNote {
@@ -77,8 +126,34 @@ export interface TeacherPrivateNote {
   updatedAt: string;
 }
 
+export interface Room {
+  id: string;
+  title: string;
+  joinCode: string;
+  partnerALabel: string;
+  partnerBLabel: string;
+  partnerAStatus: ProgressStatus;
+  partnerBStatus: ProgressStatus;
+  partnerANextTask: string;
+  partnerBNextTask: string;
+  overallProgress: number;
+  nextSchedule: string;
+  lastUpdated: string;
+}
+
 export interface EvaluationResult {
   sentence: string;
   competency: string;
   reflectionQuestion: string;
+}
+
+export interface ComprehensiveStudentEvidence {
+  membership: StudentMembership;
+  completedActivities: Activity[];
+  uncompletedActivities: Activity[];
+  submissions: Submission[];
+  comments: Comment[];
+  likesGivenCount: number;
+  likesReceivedCount: number;
+  teacherNote?: TeacherPrivateNote;
 }

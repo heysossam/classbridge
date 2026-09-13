@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { 
-  Users, CheckCircle2, Clock, Calendar, ArrowRight, RefreshCw, 
-  ExternalLink, Eye, EyeOff, AlertCircle, Sparkles, Filter, ChevronRight,
-  GraduationCap
+  Plus, Calendar, Clock, CheckCircle2, RefreshCw, ChevronRight,
+  GraduationCap, Copy, Edit2, Archive, Eye, BarChart2, Filter, AlertCircle
 } from 'lucide-react';
-import { Language, Room, ProgressStatus, StudentMembership, StudentResponse } from '../../types';
+import { Language, Room, Activity, StudentMembership, ProgressStatus } from '../../types';
 import { getTranslation } from '../../services/i18n';
 import { dataService } from '../../services/dataService';
+import { ActivityCreatorModal } from './ActivityCreatorModal';
 import { StudentDetailModal } from './StudentDetailModal';
 
 interface TeacherDashboardProps {
@@ -25,29 +25,27 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const t = (key: string) => getTranslation(currentLang, key);
 
   const [room, setRoom] = useState<Room>(dataService.getRoom());
+  const [activities, setActivities] = useState<Activity[]>(dataService.getActivities(true));
   const [students, setStudents] = useState<StudentMembership[]>(dataService.getStudents());
-  const [responses, setResponses] = useState<StudentResponse[]>(dataService.getResponses());
   
+  // Modals state
+  const [isCreatorOpen, setIsCreatorOpen] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+
+  // Check URL modal param
   const searchParams = new URLSearchParams(window.location.search);
   const initialModalName = searchParams.get('modal');
   const initStudent = initialModalName ? students.find(s => s.englishNickname.toLowerCase() === initialModalName.toLowerCase()) || null : null;
-
   const [selectedStudent, setSelectedStudent] = useState<StudentMembership | null>(initStudent);
+
   const [filterSide, setFilterSide] = useState<'All' | 'Korea Class' | 'Taiwan Class'>('All');
 
-  // Status mapping
-  const getStatusBadge = (status: ProgressStatus) => {
-    switch (status) {
-      case 'completed':
-        return <span className="badge badge-success"><CheckCircle2 size={13} /> {t('status.completed')}</span>;
-      case 'in_progress':
-        return <span className="badge badge-warning"><Clock size={13} /> {t('status.in_progress')}</span>;
-      default:
-        return <span className="badge badge-neutral">{t('status.not_started')}</span>;
-    }
+  // Reload activities
+  const reloadActivities = () => {
+    setActivities(dataService.getActivities(true));
   };
 
-  // Toggle my class status
+  // Status toggle
   const handleStatusCycle = () => {
     const currentStatus = teacherSide === 'Korea Class' ? room.partnerAStatus : room.partnerBStatus;
     const nextStatus: ProgressStatus = 
@@ -58,22 +56,27 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     setRoom({ ...updated });
   };
 
-  // Metrics
-  const krStudents = students.filter(s => s.partnerSide === 'Korea Class');
-  const twStudents = students.filter(s => s.partnerSide === 'Taiwan Class');
-  
-  const krSubmitted = responses.filter(r => r.partnerSide === 'Korea Class');
-  const twSubmitted = responses.filter(r => r.partnerSide === 'Taiwan Class');
+  // Activity Actions
+  const handleDuplicate = (id: string) => {
+    dataService.duplicateActivity(id);
+    reloadActivities();
+  };
 
-  const unsubmittedKrCodes = krStudents
-    .filter(s => !responses.some(r => r.participantCode.toUpperCase() === s.participantCode.toUpperCase()))
-    .map(s => s.participantCode);
+  const handleToggleStatus = (act: Activity) => {
+    const next = act.status === 'published' ? 'closed' : act.status === 'closed' ? 'published' : 'published';
+    dataService.updateActivityStatus(act.id, next);
+    reloadActivities();
+  };
 
-  const unsubmittedTwCodes = twStudents
-    .filter(s => !responses.some(r => r.participantCode.toUpperCase() === s.participantCode.toUpperCase()))
-    .map(s => s.participantCode);
+  const handleArchive = (id: string) => {
+    dataService.updateActivityStatus(id, 'archived');
+    reloadActivities();
+  };
 
-  // Filtered student list
+  const activeActivities = activities.filter(a => a.status === 'published');
+  const closedActivities = activities.filter(a => a.status === 'closed');
+  const draftOrArchived = activities.filter(a => a.status === 'draft' || a.status === 'archived');
+
   const displayStudents = students.filter(s => {
     if (filterSide === 'All') return true;
     return s.partnerSide === filterSide;
@@ -81,7 +84,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-      {/* Top Controls: Switch Persona Bar */}
+      {/* Top Controls Bar */}
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
@@ -106,245 +109,211 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-            {currentLang === 'ko' ? '시점 전환:' : 'Switch View:'}
-          </span>
+          <button
+            onClick={() => setIsCreatorOpen(true)}
+            className="btn-accent"
+            style={{ padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Plus size={16} />
+            <span>새 활동 만들기</span>
+          </button>
+
           <button
             onClick={() => onSwitchTeacherSide(teacherSide === 'Korea Class' ? 'Taiwan Class' : 'Korea Class')}
             className="btn-outline"
-            style={{ padding: '6px 12px', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            style={{ padding: '8px 12px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}
           >
             <RefreshCw size={13} />
-            <span>{teacherSide === 'Korea Class' ? t('teacher.switchSideTaiwan') : t('teacher.switchSideKorea')}</span>
+            <span>{teacherSide === 'Korea Class' ? '🇹🇼 Taiwan 교사 시점' : '🇰🇷 Korea 교사 시점'}</span>
           </button>
         </div>
       </div>
 
-      {/* Main Project Header */}
+      {/* Room Bilateral Progress Header */}
       <div className="cb-card" style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '14px' }}>
           <div>
-            <span className="badge badge-neutral" style={{ marginBottom: '8px' }}>
-              Room Code: {room.joinCode}
-            </span>
-            <h1 style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--color-primary)' }}>
+            <span className="badge badge-neutral" style={{ marginBottom: '6px' }}>Room: {room.joinCode}</span>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--color-primary)' }}>
               {room.title}
             </h1>
           </div>
-
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginBottom: '4px' }}>
-              {t('teacher.overallProgress')}
-            </div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-primary)' }}>
-              {room.overallProgress}%
-            </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>공동수업 전체 진행률</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-primary)' }}>{room.overallProgress}%</div>
           </div>
         </div>
 
-        {/* Overall Progress Bar */}
-        <div style={{ width: '100%', height: '10px', background: 'var(--color-border-light)', borderRadius: 'var(--radius-full)', overflow: 'hidden', marginBottom: '16px' }}>
-          <div style={{ width: `${room.overallProgress}%`, height: '100%', background: 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))', borderRadius: 'var(--radius-full)' }} />
+        <div style={{ width: '100%', height: '8px', background: 'var(--color-border-light)', borderRadius: 'var(--radius-full)', overflow: 'hidden', marginBottom: '16px' }}>
+          <div style={{ width: `${room.overallProgress}%`, height: '100%', background: 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))' }} />
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', color: 'var(--color-text-muted)', flexWrap: 'wrap', gap: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Calendar size={15} />
-            <span><strong>{t('teacher.nextSchedule')}:</strong> {room.nextSchedule}</span>
-          </div>
-          <div style={{ color: 'var(--color-text-light)' }}>
-            최근 상태 업데이트: {room.lastUpdated}
-          </div>
-        </div>
-      </div>
-
-      {/* Bilateral Bridge Board: Two Classrooms Linked Together (PRD 11조) */}
-      <div style={{ marginBottom: '28px' }}>
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'minmax(280px, 1fr) auto minmax(280px, 1fr)', 
-          alignItems: 'center', 
-          gap: '16px'
-        }}>
-          {/* Korea Class Card */}
-          <div className="cb-card" style={{ 
-            border: teacherSide === 'Korea Class' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
-            background: '#FFFFFF',
-            position: 'relative'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '1.2rem' }}>🇰🇷</span>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--color-primary)' }}>
-                  {room.partnerALabel}
-                </h3>
-              </div>
-              {getStatusBadge(room.partnerAStatus)}
+        {/* Bilateral Linked Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '14px' }}>
+          <div style={{ padding: '12px 16px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--bg-subtle)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>🇰🇷 Korea Class</span>
+              <span className="badge badge-warning">{room.partnerAStatus}</span>
             </div>
-
-            <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '16px' }}>
-              <strong>다음 할 일:</strong> {room.partnerANextTask}
-            </div>
-
+            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginBottom: '8px' }}>{room.partnerANextTask}</div>
             {teacherSide === 'Korea Class' && (
-              <button
-                onClick={handleStatusCycle}
-                className="btn-secondary"
-                style={{ width: '100%', fontSize: '0.85rem', padding: '8px 12px' }}
-              >
-                <RefreshCw size={14} />
-                <span>{t('teacher.statusControl')}</span>
+              <button onClick={handleStatusCycle} className="btn-secondary" style={{ width: '100%', padding: '4px 10px', fontSize: '0.78rem' }}>
+                우리 학급 상태 변경
               </button>
             )}
           </div>
 
-          {/* Connection Symbol */}
-          <div style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            color: 'var(--color-secondary)'
-          }}>
-            <div style={{ 
-              width: '40px', 
-              height: '40px', 
-              borderRadius: '50%', 
-              background: 'var(--color-secondary-light)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              boxShadow: 'var(--shadow-sm)'
-            }}>
-              <Sparkles size={20} />
-            </div>
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, marginTop: '4px' }}>Bridge</span>
-          </div>
+          <div style={{ color: 'var(--color-secondary)', fontWeight: 800 }}>⇄ Bridge</div>
 
-          {/* Taiwan Class Card */}
-          <div className="cb-card" style={{ 
-            border: teacherSide === 'Taiwan Class' ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
-            background: '#FFFFFF',
-            position: 'relative'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '1.2rem' }}>🇹🇼</span>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--color-primary)' }}>
-                  {room.partnerBLabel}
-                </h3>
-              </div>
-              {getStatusBadge(room.partnerBStatus)}
+          <div style={{ padding: '12px 16px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--bg-subtle)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <span style={{ fontWeight: 700, color: 'var(--color-accent)' }}>🇹🇼 Taiwan Class</span>
+              <span className="badge badge-warning">{room.partnerBStatus}</span>
             </div>
-
-            <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '16px' }}>
-              <strong>下一個任務:</strong> {room.partnerBNextTask}
-            </div>
-
+            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginBottom: '8px' }}>{room.partnerBNextTask}</div>
             {teacherSide === 'Taiwan Class' && (
-              <button
-                onClick={handleStatusCycle}
-                className="btn-accent"
-                style={{ width: '100%', fontSize: '0.85rem', padding: '8px 12px' }}
-              >
-                <RefreshCw size={14} />
-                <span>{t('teacher.statusControl')}</span>
+              <button onClick={handleStatusCycle} className="btn-accent" style={{ width: '100%', padding: '4px 10px', fontSize: '0.78rem' }}>
+                우리 학급 상태 변경
               </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Participation & Submission Summary Cards (PRD 8조 핵심기능 3) */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
-        gap: '16px', 
-        marginBottom: '24px' 
-      }}>
-        <div className="cb-card" style={{ padding: '18px' }}>
-          <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginBottom: '4px' }}>
-            {t('teacher.totalStudents')}
-          </div>
-          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--color-primary)' }}>
-            {students.length}명
-          </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-light)', marginTop: '4px' }}>
-            🇰🇷 Korea {krStudents.length}명 / 🇹🇼 Taiwan {twStudents.length}명
+      {/* Section H: Card-based Timeline for Activities */}
+      <div className="cb-card" style={{ marginBottom: '28px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div>
+            <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--color-primary)' }}>
+              공동수업 활동 타임라인 ({activities.length}개)
+            </h2>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
+              교사가 제작한 활동의 라이프사이클을 관리하고 학급별 참여를 모니터링합니다.
+            </p>
           </div>
         </div>
 
-        <div className="cb-card" style={{ padding: '18px' }}>
-          <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginBottom: '4px' }}>
-            {t('teacher.submittedCount')}
-          </div>
-          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--color-success)' }}>
-            {responses.length}명 ({Math.round((responses.length / students.length) * 100)}%)
-          </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-light)', marginTop: '4px' }}>
-            🇰🇷 {krSubmitted.length}/{krStudents.length} · 🇹🇼 {twSubmitted.length}/{twStudents.length}
-          </div>
-        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {activities.map((act) => {
+            const allSubs = dataService.getSubmissions(act.id);
+            const krCount = allSubs.filter(s => s.partnerSide === 'Korea Class').length;
+            const twCount = allSubs.filter(s => s.partnerSide === 'Taiwan Class').length;
 
-        <div className="cb-card" style={{ padding: '18px', borderLeft: '4px solid var(--color-warning)' }}>
-          <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginBottom: '4px' }}>
-            {t('teacher.unsubmittedCodes')}
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
-            {unsubmittedKrCodes.concat(unsubmittedTwCodes).length > 0 ? (
-              unsubmittedKrCodes.concat(unsubmittedTwCodes).map(code => (
-                <span key={code} className="badge badge-warning" style={{ fontSize: '0.75rem' }}>
-                  {code}
-                </span>
-              ))
-            ) : (
-              <span style={{ fontSize: '0.8rem', color: 'var(--color-success)', fontWeight: 600 }}>
-                모든 학생 제출 완료!
-              </span>
-            )}
-          </div>
+            return (
+              <div 
+                key={act.id} 
+                style={{ 
+                  border: '1px solid var(--color-border-light)', 
+                  borderRadius: 'var(--radius-sm)', 
+                  padding: '14px 16px',
+                  background: act.status === 'closed' ? '#FAF9F6' : '#fff',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '12px'
+                }}
+              >
+                <div style={{ flex: '1 1 450px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <span className="badge badge-neutral" style={{ textTransform: 'uppercase', fontSize: '0.7rem' }}>{act.type}</span>
+                    <span className={`badge ${act.status === 'published' ? 'badge-success' : act.status === 'closed' ? 'badge-neutral' : 'badge-warning'}`} style={{ fontSize: '0.7rem' }}>
+                      {act.status}
+                    </span>
+                    <span className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>
+                      {act.targetSide}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-light)' }}>
+                      기한: {act.startDate} ~ {act.dueDate}
+                    </span>
+                  </div>
+
+                  <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-primary)', marginBottom: '4px' }}>
+                    {act.title}
+                  </div>
+
+                  <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+                    제출 현황: 🇰🇷 Korea {krCount}명 / 🇹🇼 Taiwan {twCount}명 (총 {allSubs.length}건)
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <button
+                    onClick={() => { setEditingActivity(act); setIsCreatorOpen(true); }}
+                    className="btn-outline"
+                    style={{ padding: '6px 10px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <Edit2 size={13} /> 수정
+                  </button>
+                  <button
+                    onClick={() => handleDuplicate(act.id)}
+                    className="btn-outline"
+                    style={{ padding: '6px 10px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <Copy size={13} /> 복제
+                  </button>
+                  <button
+                    onClick={() => handleToggleStatus(act)}
+                    className="btn-outline"
+                    style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                  >
+                    {act.status === 'published' ? '마감' : '공개'}
+                  </button>
+                  {act.status !== 'archived' && (
+                    <button
+                      onClick={() => handleArchive(act.id)}
+                      className="btn-outline"
+                      style={{ padding: '6px 10px', fontSize: '0.78rem', color: '#999' }}
+                    >
+                      <Archive size={13} /> 보관
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* Student List & Assessment Evidence Table */}
+      {/* Section: Student Assessment & Participation Sheet */}
       <div className="cb-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
           <div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-primary)' }}>
-              {t('teacher.participationSummary')}
-            </h3>
+            <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--color-primary)' }}>
+              학생별 다중 활동 참여 및 과정중심평가 ({students.length}명)
+            </h2>
             <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
-              {currentLang === 'ko' ? '학생 이름을 클릭하면 수행 근거와 과정중심 참고 평어를 확인하고 복사할 수 있습니다.' : 'Click a student to view evidence and copy evaluation statements.'}
+              학생 카드를 클릭하면 모든 활동의 수행 근거를 한눈에 확인하고 종합 평어를 복사할 수 있습니다.
             </p>
           </div>
 
-          {/* Filter Side */}
           <div style={{ display: 'flex', gap: '6px' }}>
             {(['All', 'Korea Class', 'Taiwan Class'] as const).map(side => (
               <button
                 key={side}
                 onClick={() => setFilterSide(side)}
-                className={`btn-outline ${filterSide === side ? 'active' : ''}`}
+                className="btn-outline"
                 style={{
                   padding: '6px 12px',
                   fontSize: '0.8rem',
                   fontWeight: 600,
                   background: filterSide === side ? 'var(--color-primary)' : 'transparent',
-                  color: filterSide === side ? '#fff' : 'var(--color-text)',
-                  borderColor: filterSide === side ? 'var(--color-primary)' : 'var(--color-border)'
+                  color: filterSide === side ? '#fff' : 'var(--color-text)'
                 }}
               >
-                {side === 'All' ? '전체' : side === 'Korea Class' ? '🇰🇷 Korea' : '🇹🇼 Taiwan'}
+                {side === 'All' ? '전체 34명' : side === 'Korea Class' ? '🇰🇷 Korea 17명' : '🇹🇼 Taiwan 17명'}
               </button>
             ))}
           </div>
         </div>
 
         {/* Student Cards Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '14px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
           {displayStudents.map(st => {
-            const resp = responses.find(r => r.participantCode.toUpperCase() === st.participantCode.toUpperCase());
-            const isSubmitted = !!resp;
+            const ev = dataService.getComprehensiveEvidence(st.id);
+            const compCount = ev?.completedActivities.length || 0;
+            const subsCount = ev?.submissions.length || 0;
 
             return (
               <div
@@ -353,7 +322,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 className="cb-card hoverable"
                 style={{
                   cursor: 'pointer',
-                  padding: '16px',
+                  padding: '14px',
                   border: '1px solid var(--color-border-light)',
                   display: 'flex',
                   flexDirection: 'column',
@@ -361,63 +330,24 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 }}
               >
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontWeight: 700, color: 'var(--color-primary)', fontSize: '1.05rem' }}>
-                        {st.englishNickname}
-                      </span>
-                      <span className="badge badge-neutral" style={{ fontSize: '0.72rem' }}>
-                        {st.participantCode}
-                      </span>
+                      <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--color-primary)' }}>{st.englishNickname}</span>
+                      <span className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>{st.participantCode}</span>
                     </div>
-
-                    <span className={`badge ${st.partnerSide === 'Korea Class' ? 'badge-neutral' : 'badge-accent'}`} style={{ fontSize: '0.7rem' }}>
+                    <span className={`badge ${st.partnerSide === 'Korea Class' ? 'badge-neutral' : 'badge-accent'}`} style={{ fontSize: '0.68rem' }}>
                       {st.partnerSide === 'Korea Class' ? '🇰🇷 KR' : '🇹🇼 TW'}
                     </span>
                   </div>
 
-                  {isSubmitted ? (
-                    <div>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-accent)', marginBottom: '4px' }}>
-                        {resp.selectedOption}
-                      </div>
-                      <p style={{ 
-                        fontSize: '0.85rem', 
-                        color: 'var(--color-text)', 
-                        lineHeight: 1.4,
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden'
-                      }}>
-                        "{resp.fullStatement}"
-                      </p>
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: '0.82rem', color: 'var(--color-warning)', padding: '12px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <AlertCircle size={15} />
-                      <span>{currentLang === 'ko' ? '활동 미제출 상태' : 'Unsubmitted'}</span>
-                    </div>
-                  )}
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '6px', fontSize: '0.78rem' }}>
+                    <span className="badge badge-success">완료: {compCount}개</span>
+                    <span className="badge badge-neutral">제출물: {subsCount}건</span>
+                  </div>
                 </div>
 
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center', 
-                  marginTop: '14px', 
-                  paddingTop: '10px', 
-                  borderTop: '1px solid var(--color-border-light)',
-                  fontSize: '0.8rem'
-                }}>
-                  <span style={{ color: isSubmitted ? 'var(--color-success)' : 'var(--color-warning)', fontWeight: 600 }}>
-                    {isSubmitted ? '✓ 제출 완료' : '미제출'}
-                  </span>
-
-                  <span style={{ color: 'var(--color-primary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    {t('teacher.viewStudentDetail')}
-                    <ChevronRight size={14} />
-                  </span>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px', paddingTop: '8px', borderTop: '1px solid var(--color-border-light)', fontSize: '0.78rem', color: 'var(--color-primary)', fontWeight: 600 }}>
+                  <span>수행 근거 & 평어 보기 →</span>
                 </div>
               </div>
             );
@@ -425,12 +355,19 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         </div>
       </div>
 
-      {/* Student Detail Modal */}
+      {/* Modals */}
+      {isCreatorOpen && (
+        <ActivityCreatorModal
+          activityToEdit={editingActivity}
+          onClose={() => { setIsCreatorOpen(false); setEditingActivity(null); }}
+          onSaved={() => { setIsCreatorOpen(false); setEditingActivity(null); reloadActivities(); }}
+        />
+      )}
+
       {selectedStudent && (
         <StudentDetailModal
           currentLang={currentLang}
           student={selectedStudent}
-          response={responses.find(r => r.participantCode.toUpperCase() === selectedStudent.participantCode.toUpperCase())}
           onClose={() => setSelectedStudent(null)}
         />
       )}

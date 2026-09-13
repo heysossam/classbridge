@@ -1,17 +1,20 @@
-import React, { useState } from 'react';
-import { Language, UserRole } from './types';
+import React, { useState, useEffect } from 'react';
+import { Language, UserRole, StudentMembership, Activity } from './types';
 import { Header } from './components/common/Header';
 import { StartScreen } from './components/start/StartScreen';
 import { StudentJoin } from './components/student/StudentJoin';
-import { StudentActivity } from './components/student/StudentActivity';
+import { StudentActivityList } from './components/student/StudentActivityList';
+import { UniversalActivityView } from './components/student/UniversalActivityView';
 import { TeacherLogin } from './components/teacher/TeacherLogin';
 import { TeacherDashboard } from './components/teacher/TeacherDashboard';
 import { AdminView } from './components/admin/AdminView';
+import { dataService } from './services/dataService';
 
 type AppView = 
   | 'start' 
   | 'student_join' 
-  | 'student_activity' 
+  | 'student_activities' 
+  | 'student_activity_detail' 
   | 'teacher_login' 
   | 'teacher_dashboard' 
   | 'admin';
@@ -24,27 +27,28 @@ export default function App() {
   const [currentLang, setCurrentLang] = useState<Language>(initialLang);
   const [currentView, setCurrentView] = useState<AppView>(initialView);
 
-  const studentCode = searchParams.get('code') || 'K7M4';
-  const studentName = searchParams.get('name') || 'Sunny';
-  const studentSide = (searchParams.get('side') as 'Korea Class' | 'Taiwan Class') || 'Korea Class';
+  // Student Session
+  const studentCodeParam = searchParams.get('code') || 'K7M4';
+  const initialStudent = dataService.getStudents().find(s => s.participantCode.toUpperCase() === studentCodeParam.toUpperCase()) || dataService.getStudents()[0];
+  const [studentSession, setStudentSession] = useState<StudentMembership | null>(initialStudent);
 
-  // Student Session State (preset for easy testing or real login)
-  const [studentSession, setStudentSession] = useState<{
-    roomCode: string;
-    participantCode: string;
-    englishNickname: string;
-    partnerSide: 'Korea Class' | 'Taiwan Class';
-  } | null>({
-    roomCode: 'BRIDGE2026',
-    participantCode: studentCode,
-    englishNickname: studentName,
-    partnerSide: studentSide
-  });
+  // Selected Activity for Student View
+  const actIdParam = searchParams.get('act') || 'act-01';
+  const initialAct = dataService.getActivityById(actIdParam) || dataService.getActivities()[0];
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(initialAct);
 
   // Teacher Session State
   const [teacherSide, setTeacherSide] = useState<'Korea Class' | 'Taiwan Class'>('Korea Class');
 
-  // Current Role Mapping for Header
+  // Sync initial view when direct URL params are used
+  useEffect(() => {
+    if ((initialView as string) === 'student_activity' || initialView === 'student_activity_detail') {
+      setCurrentView('student_activity_detail');
+    } else if (initialView === 'student_activities') {
+      setCurrentView('student_activities');
+    }
+  }, [initialView]);
+
   const currentRole: UserRole | null = 
     currentView.startsWith('student') ? 'student' :
     currentView.startsWith('teacher') ? 'teacher' :
@@ -60,19 +64,23 @@ export default function App() {
     }
   };
 
-  const handleStudentJoinSuccess = (data: {
-    roomCode: string;
-    participantCode: string;
-    englishNickname: string;
-    partnerSide: 'Korea Class' | 'Taiwan Class';
-  }) => {
-    setStudentSession(data);
-    setCurrentView('student_activity');
+  const handleStudentJoinSuccess = (student: StudentMembership) => {
+    setStudentSession(student);
+    setCurrentView('student_activities'); // Go to 'My Joint Activities' list
   };
 
-  const handleTeacherLoginSuccess = (side: 'Korea Class' | 'Taiwan Class') => {
-    setTeacherSide(side);
-    setCurrentView('teacher_dashboard');
+  const handleSelectStudentActivity = (act: Activity) => {
+    setSelectedActivity(act);
+    setCurrentView('student_activity_detail');
+  };
+
+  const handleTeacherLoginSuccess = (side: 'Korea Class' | 'Taiwan Class', role?: 'teacher' | 'admin') => {
+    if (role === 'admin') {
+      setCurrentView('admin');
+    } else {
+      setTeacherSide(side);
+      setCurrentView('teacher_dashboard');
+    }
   };
 
   const handleExitToStart = () => {
@@ -104,11 +112,21 @@ export default function App() {
           />
         )}
 
-        {currentView === 'student_activity' && studentSession && (
-          <StudentActivity
+        {currentView === 'student_activities' && studentSession && (
+          <StudentActivityList
             currentLang={currentLang}
             student={studentSession}
+            onSelectActivity={handleSelectStudentActivity}
             onBack={() => setCurrentView('student_join')}
+          />
+        )}
+
+        {currentView === 'student_activity_detail' && studentSession && selectedActivity && (
+          <UniversalActivityView
+            currentLang={currentLang}
+            student={studentSession}
+            activity={selectedActivity}
+            onBack={() => setCurrentView('student_activities')}
           />
         )}
 

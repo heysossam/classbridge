@@ -1,19 +1,26 @@
-import { Room, Activity, StudentMembership, StudentResponse, TeacherPrivateNote, ProgressStatus } from '../types';
-import { initialRoom, initialActivity, initialStudents, initialResponses, initialTeacherNotes } from '../mock/demoData';
+import { 
+  Room, Activity, StudentMembership, Submission, Comment, TeacherPrivateNote, 
+  ProgressStatus, ComprehensiveStudentEvidence, ActivityStatus 
+} from '../types';
+import { 
+  ROOM_CODE, TEACHER_CODES, initialRoom, initialStudents, 
+  initialActivities, initialSubmissions, initialComments, initialTeacherNotes 
+} from '../mock/demoData';
 
-const STORAGE_KEYS = {
-  ROOM: 'classbridge_room',
-  ACTIVITY: 'classbridge_activity',
-  STUDENTS: 'classbridge_students',
-  RESPONSES: 'classbridge_responses',
-  NOTES: 'classbridge_notes',
+const KEYS = {
+  ROOM: 'cb_v2_room',
+  ACTIVITIES: 'cb_v2_activities',
+  STUDENTS: 'cb_v2_students',
+  SUBMISSIONS: 'cb_v2_submissions',
+  COMMENTS: 'cb_v2_comments',
+  NOTES: 'cb_v2_notes',
 };
 
 class DataService {
   private getStorage<T>(key: string, fallback: T): T {
     try {
-      const data = localStorage.getItem(key);
-      return data ? JSON.parse(data) : fallback;
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : fallback;
     } catch {
       return fallback;
     }
@@ -23,12 +30,40 @@ class DataService {
     try {
       localStorage.setItem(key, JSON.stringify(value));
     } catch (e) {
-      console.error('Failed to save to localStorage', e);
+      console.error('LocalStorage error:', e);
     }
   }
 
+  // --- Auth & Whitelist ---
+  public verifyStudentCredentials(
+    roomCode: string, 
+    participantCode: string, 
+    englishNickname: string
+  ): StudentMembership | null {
+    if (roomCode.trim().toUpperCase() !== ROOM_CODE) {
+      return null;
+    }
+
+    const students = this.getStudents();
+    const found = students.find(
+      s => s.englishNickname.trim().toLowerCase() === englishNickname.trim().toLowerCase() &&
+           s.participantCode.trim().toUpperCase() === participantCode.trim().toUpperCase()
+    );
+
+    return found || null;
+  }
+
+  public verifyTeacherCode(code: string): 'Korea Class' | 'Taiwan Class' | 'admin' | null {
+    const c = code.trim().toUpperCase();
+    if (c === TEACHER_CODES.KOREA) return 'Korea Class';
+    if (c === TEACHER_CODES.TAIWAN) return 'Taiwan Class';
+    if (c === TEACHER_CODES.ADMIN) return 'admin';
+    return null;
+  }
+
+  // --- Room ---
   public getRoom(): Room {
-    return this.getStorage<Room>(STORAGE_KEYS.ROOM, initialRoom);
+    return this.getStorage<Room>(KEYS.ROOM, initialRoom);
   }
 
   public updateClassStatus(partnerSide: 'Korea Class' | 'Taiwan Class', newStatus: ProgressStatus): Room {
@@ -39,65 +74,190 @@ class DataService {
       room.partnerBStatus = newStatus;
     }
     room.lastUpdated = 'Just now';
-    this.setStorage(STORAGE_KEYS.ROOM, room);
+    this.setStorage(KEYS.ROOM, room);
     return room;
   }
 
-  public getActivity(): Activity {
-    return this.getStorage<Activity>(STORAGE_KEYS.ACTIVITY, initialActivity);
-  }
-
+  // --- Students ---
   public getStudents(): StudentMembership[] {
-    return this.getStorage<StudentMembership[]>(STORAGE_KEYS.STUDENTS, initialStudents);
+    return this.getStorage<StudentMembership[]>(KEYS.STUDENTS, initialStudents);
   }
 
-  public getResponses(): StudentResponse[] {
-    return this.getStorage<StudentResponse[]>(STORAGE_KEYS.RESPONSES, initialResponses);
+  public getStudentById(id: string): StudentMembership | undefined {
+    return this.getStudents().find(s => s.id === id);
   }
 
-  public submitStudentResponse(response: Omit<StudentResponse, 'id' | 'submittedAt' | 'visibilityStatus'>): StudentResponse {
-    const responses = this.getResponses();
-    const students = this.getStudents();
+  // --- Activities ---
+  public getActivities(includeArchived = false): Activity[] {
+    const all = this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities);
+    if (includeArchived) return all;
+    return all.filter(a => a.status !== 'archived');
+  }
 
-    // Check if membership exists, if not register anonymously
-    let student = students.find(s => s.participantCode.toUpperCase() === response.participantCode.toUpperCase());
-    if (!student) {
-      student = {
-        id: `m-${Date.now()}`,
-        roomId: response.roomId,
-        participantCode: response.participantCode.toUpperCase(),
-        englishNickname: response.englishNickname,
-        partnerSide: response.partnerSide,
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-      students.push(student);
-      this.setStorage(STORAGE_KEYS.STUDENTS, students);
-    }
+  public getActivityById(id: string): Activity | undefined {
+    return this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities).find(a => a.id === id);
+  }
 
-    // Check if existing response exists, replace or add
-    const existingIndex = responses.findIndex(r => r.membershipId === student!.id || r.participantCode.toUpperCase() === response.participantCode.toUpperCase());
-    
-    const newRes: StudentResponse = {
-      ...response,
-      id: existingIndex >= 0 ? responses[existingIndex].id : `res-${Date.now()}`,
-      membershipId: student.id,
-      participantCode: response.participantCode.toUpperCase(),
-      submittedAt: new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }),
-      visibilityStatus: 'public'
+  public createActivity(activity: Omit<Activity, 'id' | 'roomId' | 'createdAt' | 'updatedAt'>): Activity {
+    const activities = this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities);
+    const newAct: Activity = {
+      ...activity,
+      id: `act-${Date.now()}`,
+      roomId: 'room-kr-tw-01',
+      createdAt: new Date().toISOString().split('T')[0],
+      updatedAt: new Date().toISOString().split('T')[0],
     };
-
-    if (existingIndex >= 0) {
-      responses[existingIndex] = newRes;
-    } else {
-      responses.push(newRes);
-    }
-
-    this.setStorage(STORAGE_KEYS.RESPONSES, responses);
-    return newRes;
+    activities.unshift(newAct);
+    this.setStorage(KEYS.ACTIVITIES, activities);
+    return newAct;
   }
 
+  public updateActivity(id: string, updates: Partial<Activity>): Activity | null {
+    const activities = this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities);
+    const idx = activities.findIndex(a => a.id === id);
+    if (idx === -1) return null;
+
+    activities[idx] = {
+      ...activities[idx],
+      ...updates,
+      updatedAt: new Date().toISOString().split('T')[0]
+    };
+    this.setStorage(KEYS.ACTIVITIES, activities);
+    return activities[idx];
+  }
+
+  public duplicateActivity(id: string): Activity | null {
+    const act = this.getActivityById(id);
+    if (!act) return null;
+
+    const dup: Activity = {
+      ...act,
+      id: `act-${Date.now()}`,
+      title: `${act.title} (Copy)`,
+      status: 'draft',
+      createdAt: new Date().toISOString().split('T')[0],
+      updatedAt: new Date().toISOString().split('T')[0]
+    };
+    const activities = this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities);
+    activities.unshift(dup);
+    this.setStorage(KEYS.ACTIVITIES, activities);
+    return dup;
+  }
+
+  public updateActivityStatus(id: string, status: ActivityStatus): void {
+    this.updateActivity(id, { status });
+  }
+
+  // --- Submissions (Posts / Polls / QA) ---
+  public getSubmissions(activityId?: string): Submission[] {
+    const all = this.getStorage<Submission[]>(KEYS.SUBMISSIONS, initialSubmissions);
+    if (!activityId) return all;
+    return all.filter(s => s.activityId === activityId);
+  }
+
+  public getSubmissionById(id: string): Submission | undefined {
+    return this.getSubmissions().find(s => s.id === id);
+  }
+
+  public createSubmission(sub: Omit<Submission, 'id' | 'submittedAt' | 'likesCount' | 'likedBy' | 'isHidden' | 'isApproved'>): Submission {
+    const subs = this.getSubmissions();
+    const newSub: Submission = {
+      ...sub,
+      id: `sub-${Date.now()}`,
+      submittedAt: new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }),
+      likesCount: 0,
+      likedBy: [],
+      isApproved: true,
+      isHidden: false
+    };
+    subs.unshift(newSub);
+    this.setStorage(KEYS.SUBMISSIONS, subs);
+    return newSub;
+  }
+
+  public updateSubmission(id: string, updates: Partial<Submission>): Submission | null {
+    const subs = this.getSubmissions();
+    const idx = subs.findIndex(s => s.id === id);
+    if (idx === -1) return null;
+
+    subs[idx] = {
+      ...subs[idx],
+      ...updates,
+      updatedAt: new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
+    };
+    this.setStorage(KEYS.SUBMISSIONS, subs);
+    return subs[idx];
+  }
+
+  public toggleLike(submissionId: string, participantCode: string): { likesCount: number; isLiked: boolean } {
+    const subs = this.getSubmissions();
+    const target = subs.find(s => s.id === submissionId);
+    if (!target) return { likesCount: 0, isLiked: false };
+
+    const idx = target.likedBy.indexOf(participantCode.toUpperCase());
+    let isLiked = false;
+    if (idx >= 0) {
+      target.likedBy.splice(idx, 1);
+      target.likesCount = Math.max(0, target.likesCount - 1);
+      isLiked = false;
+    } else {
+      target.likedBy.push(participantCode.toUpperCase());
+      target.likesCount += 1;
+      isLiked = true;
+    }
+
+    this.setStorage(KEYS.SUBMISSIONS, subs);
+    return { likesCount: target.likesCount, isLiked };
+  }
+
+  public toggleHideSubmission(id: string): boolean {
+    const subs = this.getSubmissions();
+    const target = subs.find(s => s.id === id);
+    if (!target) return false;
+    target.isHidden = !target.isHidden;
+    this.setStorage(KEYS.SUBMISSIONS, subs);
+    return target.isHidden;
+  }
+
+  // --- Comments ---
+  public getComments(submissionId?: string): Comment[] {
+    const all = this.getStorage<Comment[]>(KEYS.COMMENTS, initialComments);
+    if (!submissionId) return all;
+    return all.filter(c => c.submissionId === submissionId);
+  }
+
+  public addComment(cmt: Omit<Comment, 'id' | 'createdAt' | 'isHidden'>): Comment {
+    const cmts = this.getStorage<Comment[]>(KEYS.COMMENTS, initialComments);
+    const newCmt: Comment = {
+      ...cmt,
+      id: `cmt-${Date.now()}`,
+      createdAt: new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }),
+      isHidden: false
+    };
+    cmts.push(newCmt);
+    this.setStorage(KEYS.COMMENTS, cmts);
+    return newCmt;
+  }
+
+  public updateComment(id: string, content: string): Comment | null {
+    const cmts = this.getStorage<Comment[]>(KEYS.COMMENTS, initialComments);
+    const idx = cmts.findIndex(c => c.id === id);
+    if (idx === -1) return null;
+    cmts[idx].content = content;
+    cmts[idx].updatedAt = new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit' });
+    this.setStorage(KEYS.COMMENTS, cmts);
+    return cmts[idx];
+  }
+
+  public deleteComment(id: string): void {
+    const cmts = this.getStorage<Comment[]>(KEYS.COMMENTS, initialComments);
+    const filtered = cmts.filter(c => c.id !== id);
+    this.setStorage(KEYS.COMMENTS, filtered);
+  }
+
+  // --- Teacher Notes ---
   public getTeacherNotes(): Record<string, TeacherPrivateNote> {
-    return this.getStorage<Record<string, TeacherPrivateNote>>(STORAGE_KEYS.NOTES, initialTeacherNotes);
+    return this.getStorage<Record<string, TeacherPrivateNote>>(KEYS.NOTES, initialTeacherNotes);
   }
 
   public saveTeacherNote(membershipId: string, noteText: string): void {
@@ -110,15 +270,55 @@ class DataService {
       note: noteText,
       updatedAt: new Date().toLocaleDateString()
     };
-    this.setStorage(STORAGE_KEYS.NOTES, notes);
+    this.setStorage(KEYS.NOTES, notes);
+  }
+
+  // --- Comprehensive Evidence for Assessment ---
+  public getComprehensiveEvidence(studentId: string): ComprehensiveStudentEvidence | null {
+    const student = this.getStudentById(studentId);
+    if (!student) return null;
+
+    const activities = this.getActivities();
+    const subs = this.getSubmissions().filter(s => s.membershipId === student.id || s.participantCode.toUpperCase() === student.participantCode.toUpperCase());
+    const comments = this.getComments().filter(c => c.membershipId === student.id || c.participantCode.toUpperCase() === student.participantCode.toUpperCase());
+    
+    // Check completion per activity
+    const completedActs: Activity[] = [];
+    const uncompletedActs: Activity[] = [];
+
+    activities.forEach(act => {
+      const hasSub = subs.some(s => s.activityId === act.id);
+      if (hasSub) {
+        completedActs.push(act);
+      } else {
+        uncompletedActs.push(act);
+      }
+    });
+
+    const notes = this.getTeacherNotes();
+    const likesReceived = subs.reduce((acc, cur) => acc + (cur.likesCount || 0), 0);
+    const allSubs = this.getSubmissions();
+    const likesGiven = allSubs.filter(s => s.likedBy.includes(student.participantCode.toUpperCase())).length;
+
+    return {
+      membership: student,
+      completedActivities: completedActs,
+      uncompletedActivities: uncompletedActs,
+      submissions: subs,
+      comments,
+      likesGivenCount: likesGiven,
+      likesReceivedCount: likesReceived,
+      teacherNote: notes[student.id]
+    };
   }
 
   public resetAllToDemo(): void {
-    localStorage.removeItem(STORAGE_KEYS.ROOM);
-    localStorage.removeItem(STORAGE_KEYS.ACTIVITY);
-    localStorage.removeItem(STORAGE_KEYS.STUDENTS);
-    localStorage.removeItem(STORAGE_KEYS.RESPONSES);
-    localStorage.removeItem(STORAGE_KEYS.NOTES);
+    localStorage.removeItem(KEYS.ROOM);
+    localStorage.removeItem(KEYS.ACTIVITIES);
+    localStorage.removeItem(KEYS.STUDENTS);
+    localStorage.removeItem(KEYS.SUBMISSIONS);
+    localStorage.removeItem(KEYS.COMMENTS);
+    localStorage.removeItem(KEYS.NOTES);
   }
 }
 
