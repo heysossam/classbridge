@@ -210,8 +210,8 @@ service cloud.firestore {
       // 4-F. teacherReviews/{reviewId} 교사 평가 및 피드백 서브컬렉션
       // -----------------------------------------------------------------------
       match /teacherReviews/{reviewId} {
-        allow read: if isAuthenticated();
-        allow create, update: if isTeacherForRoom(roomId);
+        // 교사 평가 및 피드백 정보: 담당 교사 또는 admin만 읽기·생성·수정 허용 (학생 완전 접근 불가)
+        allow read, create, update: if isTeacherForRoom(roomId);
         allow delete: if false;
       }
 
