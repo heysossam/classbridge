@@ -25,7 +25,7 @@ export const DangerousDeleteModal: React.FC<DangerousDeleteModalProps> = ({
 
   const handleDelete = () => {
     if (!isMatched) return;
-    const result = dataService.deleteActivityPermanently(activity.id);
+    const result = dataService.softDeleteActivity(activity.id, 'teacher', '교사 요청에 따른 휴지통 이동');
     if (!result.success) {
       setErrorMessage(result.message);
       return;

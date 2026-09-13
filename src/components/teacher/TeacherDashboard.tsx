@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Plus, Calendar, Clock, CheckCircle2, RefreshCw, ChevronRight,
   GraduationCap, Copy, Edit2, Archive, Eye, BarChart2, Filter, 
-  AlertCircle, FolderOpen, Layers, UserCheck, Trash2, Undo2
+  AlertCircle, FolderOpen, Layers, UserCheck, Trash2, Undo2, Download
 } from 'lucide-react';
 import { Language, Room, Activity, StudentMembership, ProgressStatus } from '../../types';
 import { getTranslation } from '../../services/i18n';
@@ -136,6 +136,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            onClick={() => dataService.exportRoomDataAsJSON(room.id)}
+            className="btn-outline"
+            title="활동, 과제물, 댓글, 투표 결과를 비식별화된 JSON 파일로 백업합니다."
+            style={{ padding: '8px 12px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Download size={15} />
+            <span>{currentLang === 'ko' ? '교류방 기록 내보내기' : currentLang === 'zh-TW' ? '匯出交流室紀錄' : 'Export Room Data'}</span>
+          </button>
+
           <button
             onClick={() => setIsCreatorOpen(true)}
             className="btn-accent"

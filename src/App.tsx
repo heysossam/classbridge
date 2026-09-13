@@ -48,6 +48,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState<AppView>(initialView);
   const [showAdminRestrictedModal, setShowAdminRestrictedModal] = useState<boolean>(isDirectAdminAccess);
   const [isTeacherAuthenticated, setIsTeacherAuthenticated] = useState<boolean>(isTeacherSavedAuth);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
 
   // Student Session
   const studentCodeParam = searchParams.get('code') || 'K7M4';
@@ -74,14 +75,14 @@ export default function App() {
 
   // Route guard: Prevent any unauthorized access to admin or unauthenticated teacher dashboard
   useEffect(() => {
-    if (currentView === 'admin') {
+    if (currentView === 'admin' && !isAdminAuthenticated) {
       setCurrentView('start');
       setShowAdminRestrictedModal(true);
     } else if (currentView === 'teacher_dashboard' && !isTeacherAuthenticated) {
       // Screen-level block: Redirect unauthenticated teacher dashboard access to login
       setCurrentView('teacher_login');
     }
-  }, [currentView, isTeacherAuthenticated]);
+  }, [currentView, isTeacherAuthenticated, isAdminAuthenticated]);
 
   // URL state synchronization: keeps current view, language, and context in sync for refresh resilience
   useEffect(() => {
@@ -152,6 +153,7 @@ export default function App() {
 
   const handleExitToStart = () => {
     setIsTeacherAuthenticated(false);
+    setIsAdminAuthenticated(false);
     sessionStorage.removeItem('cb_teacher_side');
     setCurrentView('start');
   };
@@ -230,6 +232,10 @@ export default function App() {
       <AdminRestrictedModal
         isOpen={showAdminRestrictedModal}
         onClose={() => setShowAdminRestrictedModal(false)}
+        onAdminAuthenticated={() => {
+          setIsAdminAuthenticated(true);
+          setCurrentView('admin');
+        }}
         currentLang={currentLang}
       />
     </div>

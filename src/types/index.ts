@@ -73,6 +73,12 @@ export interface Activity {
     allowAnswerEdit: boolean;
   };
 
+  // Soft Delete fields for safety protection
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
+  deletionReason?: string;
+
   createdAt: string;
   updatedAt: string;
 }
@@ -97,6 +103,10 @@ export interface Submission {
   isHidden: boolean;
   likesCount: number;
   likedBy: string[]; // participantCodes
+  // Soft delete fields
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
 }
 
 export interface Comment {
@@ -111,6 +121,22 @@ export interface Comment {
   createdAt: string;
   updatedAt?: string;
   isHidden: boolean;
+  // Soft delete fields
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
+}
+
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userEmail?: string;
+  userRole: UserRole;
+  action: 'create' | 'update' | 'soft_delete' | 'restore' | 'permanent_delete' | 'login';
+  targetType: 'activity' | 'submission' | 'comment' | 'note' | 'room';
+  targetId: string;
+  details?: string;
 }
 
 export interface StudentMembership {

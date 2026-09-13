@@ -3,6 +3,7 @@ import { KeyRound, User, AlertCircle, ArrowRight, ArrowLeft, ShieldCheck } from 
 import { Language, StudentMembership } from '../../types';
 import { getTranslation } from '../../services/i18n';
 import { dataService } from '../../services/dataService';
+import { loginAnonymouslyStudent } from '../../firebase';
 
 interface StudentJoinProps {
   currentLang: Language;
@@ -21,6 +22,7 @@ export const StudentJoin: React.FC<StudentJoinProps> = ({
   const [participantCode, setParticipantCode] = useState('');
   const [englishNickname, setEnglishNickname] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   // Fast presets for quick demo testing
   const handleQuickPreset = (code: string, name: string) => {
@@ -29,7 +31,7 @@ export const StudentJoin: React.FC<StudentJoinProps> = ({
     setErrorMessage('');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -47,6 +49,25 @@ export const StudentJoin: React.FC<StudentJoinProps> = ({
       return;
     }
 
+    setIsAuthenticating(true);
+    try {
+      // Background Firebase Anonymous Auth
+      await loginAnonymouslyStudent();
+      // Securely claim participant slot with anonymous UID
+      await dataService.claimParticipantSlot(roomCode, verified.participantCode, verified.englishNickname);
+    } catch (err) {
+      console.warn('Firebase anonymous auth offline fallback:', err);
+    } finally {
+      setIsAuthenticating(false);
+    }
+
+    dataService.logAuditAction(
+      'login', 
+      'room', 
+      verified.roomId, 
+      `Student verified and joined: ${verified.englishNickname} (${verified.participantCode})`,
+      'student'
+    );
     onJoinSuccess(verified);
   };
 

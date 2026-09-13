@@ -205,7 +205,11 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
 
   // Submission Edit
   const handleSaveEditSub = (subId: string) => {
-    dataService.updateSubmission(subId, { content: editContent.trim() });
+    const res = dataService.updateSubmission(subId, { content: editContent.trim() }, student.participantCode);
+    if (!res.success) {
+      alert(res.message || '과제물을 수정할 수 없습니다.');
+      return;
+    }
     setEditingSubId(null);
     setSubmissions(dataService.getSubmissions(activity.id));
   };
