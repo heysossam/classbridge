@@ -34,6 +34,11 @@ class DataService {
   private isReviewerMode = false;
   private unsubs: (() => void)[] = [];
 
+  // Track initial Firestore data readiness to prevent flashing LocalStorage demo data
+  private initialDataLoaded = false;
+  private initialDataPromise: Promise<boolean> | null = null;
+  private resolveInitialData: ((val: boolean) => void) | null = null;
+
   // Reviewer in-memory mock store (completely isolated from LocalStorage and Firestore)
   private reviewerRoom: Room | null = null;
   private reviewerActivities: Activity[] | null = null;
@@ -47,9 +52,11 @@ class DataService {
     // Only subscribe to Firestore if user is authenticated and not in reviewer mode
     onAuthChanged((user) => {
       if (user && !this.isReviewerMode && this.isFirebaseMode()) {
-        this.initFirestoreSync();
+        const role: UserRole = user.isAnonymous ? 'student' : 'teacher';
+        this.initFirestoreSync(role);
       } else if (!user) {
         this.stopFirestoreSync();
+        this.resetDataLoadedState();
       }
     });
   }
@@ -67,8 +74,10 @@ class DataService {
     } else {
       this.clearReviewerData();
       this.stopFirestoreSync();
+      this.resetDataLoadedState();
       if (auth.currentUser && this.isFirebaseMode()) {
-        this.initFirestoreSync();
+        const role: UserRole = auth.currentUser.isAnonymous ? 'student' : 'teacher';
+        this.initFirestoreSync(role);
       }
     }
   }
@@ -130,10 +139,27 @@ class DataService {
   }
 
   // --- Firestore Real-time Sync (Subcollections) ---
-  public async initFirestoreSync() {
-    if (this.isReviewerMode || this.isFirestoreSyncStarted || !this.isFirebaseMode()) return;
+  public async initFirestoreSync(role?: UserRole) {
+    if (this.isReviewerMode || !this.isFirebaseMode()) return;
     if (!auth.currentUser) return; // Prevent unauthenticated subscription permission errors
+
+    // Clean up any existing listeners first to prevent duplicates (Strict Mode safe)
+    this.stopFirestoreSync();
     this.isFirestoreSyncStarted = true;
+
+    if (!this.initialDataLoaded && !this.initialDataPromise) {
+      this.initialDataPromise = new Promise<boolean>((resolve) => {
+        this.resolveInitialData = resolve;
+      });
+    }
+
+    const markInitialDataDone = () => {
+      this.initialDataLoaded = true;
+      if (this.resolveInitialData) {
+        this.resolveInitialData(true);
+        this.resolveInitialData = null;
+      }
+    };
 
     try {
       // 1. Listen to Room: rooms/{roomId}
@@ -161,10 +187,12 @@ class DataService {
           list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
           this.setStorage(KEYS.ACTIVITIES, list);
         }
+        markInitialDataDone();
       }, (err) => {
         if (!this.isReviewerMode) {
           console.warn('Firestore activities sync notice:', err.message);
         }
+        markInitialDataDone();
       });
       this.unsubs.push(unsubActs);
 
@@ -201,29 +229,62 @@ class DataService {
       this.unsubs.push(unsubCmts);
 
       // 5. Listen to Teacher Notes: teacherPrivateNotes/{noteId}
-      const notesCol = collection(db, 'teacherPrivateNotes');
-      const unsubNotes = onSnapshot(notesCol, (snapshot) => {
-        if (this.isReviewerMode) return;
-        if (!snapshot.empty) {
-          const map: Record<string, TeacherPrivateNote> = {};
-          snapshot.forEach((d) => {
-            const data = d.data() as TeacherPrivateNote;
-            map[data.membershipId] = data;
-          });
-          this.setStorage(KEYS.NOTES, map);
-        }
-      }, (err) => {
-        if (!this.isReviewerMode) {
-          console.warn('Firestore teacher notes sync notice:', err.message);
-        }
-      });
-      this.unsubs.push(unsubNotes);
+      // CRITICAL: Anonymous students are strictly forbidden from reading teacherPrivateNotes per firestore.rules!
+      // Only teachers and admins should subscribe to prevent permission errors.
+      const isAnonymousStudent = auth.currentUser?.isAnonymous === true;
+      if (!isAnonymousStudent && (role === 'teacher' || role === 'admin')) {
+        const notesCol = collection(db, 'teacherPrivateNotes');
+        const unsubNotes = onSnapshot(notesCol, (snapshot) => {
+          if (this.isReviewerMode) return;
+          if (!snapshot.empty) {
+            const map: Record<string, TeacherPrivateNote> = {};
+            snapshot.forEach((d) => {
+              const data = d.data() as TeacherPrivateNote;
+              map[data.membershipId] = data;
+            });
+            this.setStorage(KEYS.NOTES, map);
+          }
+        }, (err) => {
+          if (!this.isReviewerMode) {
+            console.warn('Firestore teacher notes sync notice:', err.message);
+          }
+        });
+        this.unsubs.push(unsubNotes);
+      }
 
     } catch (e) {
       if (!this.isReviewerMode) {
         console.warn('Firestore connection initialized in offline-resilient mode:', e);
       }
+      markInitialDataDone();
     }
+  }
+
+  public isInitialDataReady(): boolean {
+    return this.isReviewerMode || !this.isFirebaseMode() || this.initialDataLoaded;
+  }
+
+  public async waitForInitialData(timeoutMs: number = 3500): Promise<boolean> {
+    if (this.isReviewerMode || !this.isFirebaseMode() || this.initialDataLoaded) {
+      return true;
+    }
+    if (!this.initialDataPromise) {
+      this.initialDataLoaded = true;
+      return true;
+    }
+    const timer = new Promise<boolean>((resolve) => {
+      setTimeout(() => {
+        this.initialDataLoaded = true;
+        resolve(true);
+      }, timeoutMs);
+    });
+    return Promise.race([this.initialDataPromise, timer]);
+  }
+
+  public resetDataLoadedState(): void {
+    this.initialDataLoaded = false;
+    this.initialDataPromise = null;
+    this.resolveInitialData = null;
   }
 
   public stopFirestoreSync(): void {
@@ -410,9 +471,21 @@ class DataService {
 
   // --- Activities ---
   public getActivities(includeArchived = false, includeDeleted = false): Activity[] {
-    const all = this.isReviewerMode
-      ? (this.reviewerActivities || (this.initReviewerData(), this.reviewerActivities!))
-      : this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities);
+    if (this.isReviewerMode) {
+      const all = (this.reviewerActivities || (this.initReviewerData(), this.reviewerActivities!));
+      return all.filter(a => {
+        if (!includeDeleted && a.isDeleted) return false;
+        if (!includeArchived && a.status === 'archived') return false;
+        return true;
+      });
+    }
+
+    // Requirement 4: Prevent LocalStorage demo data from rendering before Firestore data in Firebase student mode
+    if (this.isFirebaseMode() && !this.initialDataLoaded && auth.currentUser?.isAnonymous) {
+      return [];
+    }
+
+    const all = this.getStorage<Activity[]>(KEYS.ACTIVITIES, initialActivities);
     return all.filter(a => {
       if (!includeDeleted && a.isDeleted) return false;
       if (!includeArchived && a.status === 'archived') return false;
@@ -648,9 +721,19 @@ class DataService {
 
   // --- Submissions (Student Writing / Polls / QA) ---
   public getSubmissions(activityId?: string): Submission[] {
-    const all = this.isReviewerMode
-      ? (this.reviewerSubmissions || (this.initReviewerData(), this.reviewerSubmissions!))
-      : this.getStorage<Submission[]>(KEYS.SUBMISSIONS, initialSubmissions);
+    if (this.isReviewerMode) {
+      if (!this.reviewerSubmissions) this.initReviewerData();
+      const valid = (this.reviewerSubmissions || []).filter(s => !s.isDeleted);
+      if (!activityId) return valid;
+      return valid.filter(s => s.activityId === activityId);
+    }
+
+    // Requirement 4: Prevent LocalStorage demo data from rendering before Firestore data in Firebase student mode
+    if (this.isFirebaseMode() && !this.initialDataLoaded && auth.currentUser?.isAnonymous) {
+      return [];
+    }
+
+    const all = this.getStorage<Submission[]>(KEYS.SUBMISSIONS, initialSubmissions);
     const valid = all.filter(s => !s.isDeleted);
     if (!activityId) return valid;
     return valid.filter(s => s.activityId === activityId);
@@ -977,9 +1060,19 @@ class DataService {
 
   // --- Comments ---
   public getComments(submissionId?: string): Comment[] {
-    const all = this.isReviewerMode
-      ? (this.reviewerComments || (this.initReviewerData(), this.reviewerComments!))
-      : this.getStorage<Comment[]>(KEYS.COMMENTS, initialComments);
+    if (this.isReviewerMode) {
+      if (!this.reviewerComments) this.initReviewerData();
+      const valid = (this.reviewerComments || []).filter(c => !c.isDeleted);
+      if (!submissionId) return valid;
+      return valid.filter(c => c.submissionId === submissionId);
+    }
+
+    // Requirement 4: Prevent LocalStorage demo data from rendering before Firestore data in Firebase student mode
+    if (this.isFirebaseMode() && !this.initialDataLoaded && auth.currentUser?.isAnonymous) {
+      return [];
+    }
+
+    const all = this.getStorage<Comment[]>(KEYS.COMMENTS, initialComments);
     const valid = all.filter(c => !c.isDeleted);
     if (!submissionId) return valid;
     return valid.filter(c => c.submissionId === submissionId);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Language, UserRole, StudentMembership, Activity } from './types';
 import { Header } from './components/common/Header';
 import { StartScreen } from './components/start/StartScreen';
@@ -9,8 +9,9 @@ import { TeacherLogin } from './components/teacher/TeacherLogin';
 import { TeacherDashboard } from './components/teacher/TeacherDashboard';
 import { AdminView } from './components/admin/AdminView';
 import { AdminRestrictedModal } from './components/common/AdminRestrictedModal';
+import { StudentLoadingCard, StudentErrorCard } from './components/student/StudentEntryStateCard';
 import { dataService } from './services/dataService';
-import { logoutFirebaseUser } from './firebase';
+import { logoutFirebaseUser, loginAnonymouslyStudent } from './firebase';
 
 type AppView = 
   | 'start' 
@@ -20,6 +21,14 @@ type AppView =
   | 'teacher_login' 
   | 'teacher_dashboard' 
   | 'admin';
+
+export type StudentEntryStatus = 
+  | 'idle' 
+  | 'validating' 
+  | 'authenticating' 
+  | 'loadingData' 
+  | 'ready' 
+  | 'error';
 
 export default function App() {
   const searchParams = new URLSearchParams(window.location.search);
@@ -36,21 +45,23 @@ export default function App() {
   const isTeacherSavedAuth = !!savedTeacherSide;
 
   // Direct URL admin & teacher dashboard access defense
-  // NOTE: In this LocalStorage MVP, client-side route guards prevent students and unauthorized users
-  // from directly entering teacher dashboards or admin screens via URL parameter manipulation (?view=...).
-  // True server-side security authorization will be enforced upon Firebase integration via
-  // Firebase Authentication (Custom Claims) and Firestore Security Rules.
   const requestedViewParam = searchParams.get('view');
+  const studentCodeParam = searchParams.get('code');
+  const actIdParam = searchParams.get('act');
   const isDirectAdminAccess = requestedViewParam === 'admin';
   const isDirectTeacherAccess = requestedViewParam === 'teacher_dashboard' && !isTeacherSavedAuth && !isReviewerUrl;
 
-  // If directly requesting teacher_dashboard without prior authentication, route to teacher_login
+  const isStudentDeepLink = !!(studentCodeParam && (requestedViewParam?.startsWith('student') || requestedViewParam === null) && !isReviewerUrl);
+
+  // Initial view decision
   const initialView: AppView = isDirectAdminAccess 
     ? 'start' 
     : isDirectTeacherAccess 
     ? 'teacher_login' 
     : isReviewerUrl
     ? 'teacher_dashboard'
+    : isStudentDeepLink
+    ? 'student_activities'
     : ((requestedViewParam as AppView) || 'start');
 
   const [currentLang, setCurrentLang] = useState<Language>(initialLang);
@@ -60,20 +71,140 @@ export default function App() {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
   const [isReviewerMode, setIsReviewerMode] = useState<boolean>(isReviewerUrl);
 
-  // Student Session: Only restore if explicit code parameter is provided
-  const studentCodeParam = searchParams.get('code');
-  const initialStudent = studentCodeParam 
-    ? dataService.getStudents().find(s => s.participantCode.toUpperCase() === studentCodeParam.toUpperCase()) || null
-    : null;
-  const [studentSession, setStudentSession] = useState<StudentMembership | null>(initialStudent);
+  // Student entry state machine (Requirement 1)
+  const [studentEntryStatus, setStudentEntryStatus] = useState<StudentEntryStatus>(
+    isStudentDeepLink ? 'validating' : 'idle'
+  );
+  const [studentEntryError, setStudentEntryError] = useState<string>('');
+  const [studentSession, setStudentSession] = useState<StudentMembership | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
 
-  // Selected Activity for Student View: Only restore if explicit act parameter is provided
-  const actIdParam = searchParams.get('act');
-  const initialAct = actIdParam ? dataService.getActivityById(actIdParam) || null : null;
-  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(initialAct);
+  // Guards against duplicate async executions in React StrictMode
+  const isProcessingEntryRef = useRef<boolean>(false);
+  const studentInitTriggeredRef = useRef<boolean>(false);
 
   // Teacher Session State
   const [teacherSide, setTeacherSide] = useState<'Korea Class' | 'Taiwan Class'>(savedTeacherSide || 'Korea Class');
+
+  // Unified Student Entry Sequence: idle -> validating -> authenticating -> loadingData -> ready -> error
+  const runStudentEntrySequence = async (
+    code: string,
+    englishNickname?: string,
+    targetView: AppView = 'student_activities',
+    targetActivityId?: string | null
+  ) => {
+    if (isProcessingEntryRef.current) return;
+    isProcessingEntryRef.current = true;
+
+    try {
+      // Stage 1: validating
+      setStudentEntryStatus('validating');
+      setStudentEntryError('');
+
+      const cleanCode = code.trim().toUpperCase();
+      let verified: StudentMembership | null = null;
+
+      if (englishNickname) {
+        verified = dataService.verifyStudentCredentials('BRIDGE2026', cleanCode, englishNickname);
+      } else {
+        const found = dataService.getStudents().find(s => s.participantCode.toUpperCase() === cleanCode);
+        if (found) {
+          const partnerSide: 'Korea Class' | 'Taiwan Class' = cleanCode.startsWith('K') 
+            ? 'Korea Class' 
+            : cleanCode.startsWith('T') 
+            ? 'Taiwan Class' 
+            : found.partnerSide;
+          verified = { ...found, partnerSide };
+        }
+      }
+
+      if (!verified) {
+        setStudentEntryStatus('error');
+        setStudentEntryError(
+          currentLang === 'zh-TW'
+            ? '未能進入。請確認參與代碼後再試一次。'
+            : currentLang === 'en'
+            ? 'Failed to enter. Please check your participant code and try again.'
+            : '입장하지 못했습니다. 참여코드를 확인하고 다시 시도해 주세요.'
+        );
+        isProcessingEntryRef.current = false;
+        return;
+      }
+
+      // Stage 2: authenticating
+      setStudentEntryStatus('authenticating');
+      if (!dataService.getIsReviewerMode() && dataService.isFirebaseMode()) {
+        try {
+          await loginAnonymouslyStudent();
+          await dataService.claimParticipantSlot('BRIDGE2026', verified.participantCode, verified.englishNickname);
+        } catch (authErr) {
+          console.warn('Student anonymous auth fallback/notice:', authErr);
+        }
+      }
+
+      // Stage 3: loadingData
+      setStudentEntryStatus('loadingData');
+      if (!dataService.getIsReviewerMode() && dataService.isFirebaseMode()) {
+        try {
+          await dataService.initFirestoreSync('student');
+          await dataService.waitForInitialData(3500);
+        } catch (dataErr) {
+          console.warn('Firestore initial data sync notice:', dataErr);
+        }
+      }
+
+      dataService.logAuditAction(
+        'login',
+        'room',
+        verified.roomId,
+        `Student verified and joined: ${verified.englishNickname} (${verified.participantCode})`,
+        'student'
+      );
+
+      // Stage 4: ready - Change currentView and run replaceState exactly once
+      setStudentSession(verified);
+      setStudentEntryStatus('ready');
+
+      let destView: AppView = targetView;
+      let matchedAct: Activity | null = null;
+      if (targetActivityId) {
+        matchedAct = dataService.getActivityById(targetActivityId) || null;
+        if (matchedAct) {
+          setSelectedActivity(matchedAct);
+          destView = 'student_activity_detail';
+        }
+      }
+      setCurrentView(destView);
+
+      // Requirement 6: Single replaceState execution upon reaching ready
+      const url = new URL(window.location.href);
+      url.searchParams.set('lang', currentLang);
+      url.searchParams.set('view', destView);
+      url.searchParams.set('code', verified.participantCode);
+      if (matchedAct) {
+        url.searchParams.set('act', matchedAct.id);
+      } else {
+        url.searchParams.delete('act');
+      }
+      window.history.replaceState({}, document.title, url.pathname + url.search);
+
+    } catch (unexpectedErr) {
+      console.error('Unexpected student entry error:', unexpectedErr);
+      setStudentEntryStatus('error');
+      setStudentEntryError('입장하지 못했습니다. 참여코드를 확인하고 다시 시도해 주세요.');
+    } finally {
+      isProcessingEntryRef.current = false;
+    }
+  };
+
+  // Initial student deep-link handler (on page refresh / direct URL)
+  useEffect(() => {
+    if (isStudentDeepLink && studentCodeParam && !studentInitTriggeredRef.current) {
+      studentInitTriggeredRef.current = true;
+      const targetView: AppView = (requestedViewParam as AppView) || 'student_activities';
+      runStudentEntrySequence(studentCodeParam, undefined, targetView, actIdParam);
+    }
+  }, []);
 
   // Handle direct URL admin attempt cleanup
   useEffect(() => {
@@ -85,19 +216,27 @@ export default function App() {
     }
   }, [isDirectAdminAccess, isDirectTeacherAccess]);
 
-  // Route guard: Prevent any unauthorized access to admin or unauthenticated teacher dashboard
+  // Route guard: Prevent unauthorized access to admin or teacher dashboard
   useEffect(() => {
     if (currentView === 'admin' && !isAdminAuthenticated) {
       setCurrentView('start');
       setShowAdminRestrictedModal(true);
     } else if (currentView === 'teacher_dashboard' && !isTeacherAuthenticated && !isReviewerMode) {
-      // Screen-level block: Redirect unauthenticated teacher dashboard access to login
       setCurrentView('teacher_login');
     }
   }, [currentView, isTeacherAuthenticated, isAdminAuthenticated, isReviewerMode]);
 
-  // URL state synchronization: keeps current view, language, and context in sync for refresh resilience
+  // URL state synchronization: Single source of truth. Does NOT fire during transient loading states!
   useEffect(() => {
+    if (
+      studentEntryStatus === 'validating' ||
+      studentEntryStatus === 'authenticating' ||
+      studentEntryStatus === 'loadingData' ||
+      studentEntryStatus === 'error'
+    ) {
+      return;
+    }
+
     const url = new URL(window.location.href);
     url.searchParams.set('lang', currentLang);
     if (currentView !== 'start') {
@@ -126,19 +265,10 @@ export default function App() {
     }
 
     window.history.replaceState({}, document.title, url.pathname + url.search);
-  }, [currentView, currentLang, studentSession, selectedActivity, isReviewerMode]);
-
-  // Sync initial view when direct student URL params are used
-  useEffect(() => {
-    if ((initialView as string) === 'student_activity' || initialView === 'student_activity_detail') {
-      setCurrentView('student_activity_detail');
-    } else if (initialView === 'student_activities') {
-      setCurrentView('student_activities');
-    }
-  }, [initialView]);
+  }, [currentView, currentLang, studentSession, selectedActivity, isReviewerMode, studentEntryStatus]);
 
   const currentRole: UserRole | null = 
-    currentView.startsWith('student') ? 'student' :
+    (currentView.startsWith('student') || studentEntryStatus !== 'idle') ? 'student' :
     currentView.startsWith('teacher') ? 'teacher' :
     currentView === 'admin' ? 'admin' : null;
 
@@ -148,14 +278,29 @@ export default function App() {
     } else if (role === 'teacher') {
       setCurrentView('teacher_login');
     } else if (role === 'admin') {
-      // Direct admin role selection is blocked before Firebase Google Auth
       setShowAdminRestrictedModal(true);
     }
   };
 
-  const handleStudentJoinSuccess = (student: StudentMembership) => {
-    setStudentSession(student);
-    setCurrentView('student_activities'); // Go to 'My Joint Activities' list
+  const handleStartStudentJoin = (roomCode: string, participantCode: string, englishNickname: string) => {
+    runStudentEntrySequence(participantCode, englishNickname, 'student_activities');
+  };
+
+  const handleRetryStudentEntry = () => {
+    isProcessingEntryRef.current = false;
+    studentInitTriggeredRef.current = false;
+    setStudentEntryStatus('idle');
+    setStudentEntryError('');
+    setStudentSession(null);
+    setSelectedActivity(null);
+    setCurrentView('student_join');
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('lang', currentLang);
+    url.searchParams.set('view', 'student_join');
+    url.searchParams.delete('code');
+    url.searchParams.delete('act');
+    window.history.replaceState({}, document.title, url.pathname + url.search);
   };
 
   const handleSelectStudentActivity = (act: Activity) => {
@@ -172,7 +317,6 @@ export default function App() {
     setCurrentView('teacher_dashboard');
   };
 
-  // Requirement 3: 안전한 평가자 체험 모드 진입
   const handleEnterReviewerMode = () => {
     dataService.setReviewerMode(true);
     setIsReviewerMode(true);
@@ -181,9 +325,12 @@ export default function App() {
     setCurrentView('teacher_dashboard');
   };
 
-  // Requirement 2: 모든 화면의 나가기 버튼 정상화 및 공통 초기화 함수
   const handleGlobalExit = async () => {
-    // 1. React 상태 초기화
+    // 1. Reset entry status & state
+    isProcessingEntryRef.current = false;
+    studentInitTriggeredRef.current = false;
+    setStudentEntryStatus('idle');
+    setStudentEntryError('');
     setIsTeacherAuthenticated(false);
     setIsAdminAuthenticated(false);
     setIsReviewerMode(false);
@@ -192,14 +339,16 @@ export default function App() {
     setShowAdminRestrictedModal(false);
     setCurrentView('start');
 
-    // 2. dataService reviewer mode 정리
+    // 2. dataService cleanup
     dataService.setReviewerMode(false);
+    dataService.stopFirestoreSync();
+    dataService.resetDataLoadedState();
 
-    // 3. sessionStorage의 현재 화면 및 역할 상태 제거
+    // 3. sessionStorage cleanup
     sessionStorage.removeItem('cb_teacher_side');
     sessionStorage.clear();
 
-    // 4. URL의 view, code, act, modal, reviewer 등 화면 복원용 query parameter 제거
+    // 4. URL cleanup
     const url = new URL(window.location.href);
     url.searchParams.delete('view');
     url.searchParams.delete('code');
@@ -210,13 +359,18 @@ export default function App() {
     const cleanUrl = url.pathname + (url.searchParams.get('lang') ? `?lang=${url.searchParams.get('lang')}` : '');
     window.history.replaceState({}, document.title, cleanUrl);
 
-    // 5. 학생 익명 세션 또는 Google 세션이 있으면 적절히 signOut
+    // 5. Firebase signOut
     try {
       await logoutFirebaseUser();
     } catch (e) {
       console.warn('Firebase sign out notice on exit:', e);
     }
   };
+
+  const isTransientLoading = 
+    studentEntryStatus === 'validating' || 
+    studentEntryStatus === 'authenticating' || 
+    studentEntryStatus === 'loadingData';
 
   return (
     <div className="app-container">
@@ -229,66 +383,88 @@ export default function App() {
       />
 
       <main className="main-content">
-        {currentView === 'start' && (
-          <StartScreen
+        {/* Requirement 2: Show single stable centered loading card from validating until ready */}
+        {isTransientLoading && (
+          <StudentLoadingCard currentLang={currentLang} />
+        )}
+
+        {/* Requirement 9: Show explicit error card with retry button on failure */}
+        {studentEntryStatus === 'error' && (
+          <StudentErrorCard
             currentLang={currentLang}
-            onSelectRole={handleSelectRole}
-            onAdminClick={() => setShowAdminRestrictedModal(true)}
-            onReviewerClick={handleEnterReviewerMode}
+            errorMessage={studentEntryError}
+            onRetry={handleRetryStudentEntry}
           />
         )}
 
-        {currentView === 'student_join' && (
-          <StudentJoin
-            currentLang={currentLang}
-            onJoinSuccess={handleStudentJoinSuccess}
-            onBack={handleGlobalExit}
-          />
-        )}
+        {/* Normal Views rendered only when NOT in transient loading or error state */}
+        {!isTransientLoading && studentEntryStatus !== 'error' && (
+          <>
+            {currentView === 'start' && (
+              <StartScreen
+                currentLang={currentLang}
+                onSelectRole={handleSelectRole}
+                onAdminClick={() => setShowAdminRestrictedModal(true)}
+                onReviewerClick={handleEnterReviewerMode}
+              />
+            )}
 
-        {currentView === 'student_activities' && studentSession && (
-          <StudentActivityList
-            currentLang={currentLang}
-            student={studentSession}
-            onSelectActivity={handleSelectStudentActivity}
-            onBack={handleGlobalExit}
-          />
-        )}
+            {currentView === 'student_join' && (
+              <StudentJoin
+                currentLang={currentLang}
+                onStartJoin={handleStartStudentJoin}
+                onBack={handleGlobalExit}
+              />
+            )}
 
-        {currentView === 'student_activity_detail' && studentSession && selectedActivity && (
-          <UniversalActivityView
-            currentLang={currentLang}
-            student={studentSession}
-            activity={selectedActivity}
-            onBack={() => setCurrentView('student_activities')}
-          />
-        )}
+            {currentView === 'student_activities' && studentSession && (
+              <div className="page-view">
+                <StudentActivityList
+                  currentLang={currentLang}
+                  student={studentSession}
+                  onSelectActivity={handleSelectStudentActivity}
+                  onBack={handleGlobalExit}
+                />
+              </div>
+            )}
 
-        {currentView === 'teacher_login' && (
-          <TeacherLogin
-            currentLang={currentLang}
-            onLoginSuccess={handleTeacherLoginSuccess}
-            onBack={handleGlobalExit}
-            onEnterReviewerMode={handleEnterReviewerMode}
-          />
-        )}
+            {currentView === 'student_activity_detail' && studentSession && selectedActivity && (
+              <div className="page-view">
+                <UniversalActivityView
+                  currentLang={currentLang}
+                  student={studentSession}
+                  activity={selectedActivity}
+                  onBack={() => setCurrentView('student_activities')}
+                />
+              </div>
+            )}
 
-        {currentView === 'teacher_dashboard' && (
-          <TeacherDashboard
-            currentLang={currentLang}
-            teacherSide={teacherSide}
-            onSwitchTeacherSide={setTeacherSide}
-            onBack={handleGlobalExit}
-            isReviewerMode={isReviewerMode}
-          />
-        )}
+            {currentView === 'teacher_login' && (
+              <TeacherLogin
+                currentLang={currentLang}
+                onLoginSuccess={handleTeacherLoginSuccess}
+                onBack={handleGlobalExit}
+                onEnterReviewerMode={handleEnterReviewerMode}
+              />
+            )}
 
-        {/* AdminView is rendered only if authorized (currently blocked) */}
-        {currentView === 'admin' && (
-          <AdminView
-            currentLang={currentLang}
-            onBack={handleGlobalExit}
-          />
+            {currentView === 'teacher_dashboard' && (
+              <TeacherDashboard
+                currentLang={currentLang}
+                teacherSide={teacherSide}
+                onSwitchTeacherSide={setTeacherSide}
+                onBack={handleGlobalExit}
+                isReviewerMode={isReviewerMode}
+              />
+            )}
+
+            {currentView === 'admin' && (
+              <AdminView
+                currentLang={currentLang}
+                onBack={handleGlobalExit}
+              />
+            )}
+          </>
         )}
       </main>
 

@@ -7,13 +7,15 @@ import { loginAnonymouslyStudent } from '../../firebase';
 
 interface StudentJoinProps {
   currentLang: Language;
-  onJoinSuccess: (student: StudentMembership) => void;
+  onJoinSuccess?: (student: StudentMembership) => void;
+  onStartJoin?: (roomCode: string, participantCode: string, englishNickname: string) => void;
   onBack: () => void;
 }
 
 export const StudentJoin: React.FC<StudentJoinProps> = ({
   currentLang,
   onJoinSuccess,
+  onStartJoin,
   onBack,
 }) => {
   const t = (key: string) => getTranslation(currentLang, key);
@@ -22,7 +24,6 @@ export const StudentJoin: React.FC<StudentJoinProps> = ({
   const [participantCode, setParticipantCode] = useState('');
   const [englishNickname, setEnglishNickname] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   // Fast presets for quick demo testing
   const handleQuickPreset = (code: string, name: string) => {
@@ -31,14 +32,18 @@ export const StudentJoin: React.FC<StudentJoinProps> = ({
     setErrorMessage('');
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
+
+    if (onStartJoin) {
+      onStartJoin(roomCode, participantCode, englishNickname);
+      return;
+    }
 
     const verified = dataService.verifyStudentCredentials(roomCode, participantCode, englishNickname);
 
     if (!verified) {
-      // Standard strict error message required by PRD Section 6
       setErrorMessage(
         currentLang === 'ko' 
           ? '교류방 정보 또는 참여코드를 확인해 주세요.' 
@@ -49,26 +54,7 @@ export const StudentJoin: React.FC<StudentJoinProps> = ({
       return;
     }
 
-    setIsAuthenticating(true);
-    try {
-      // Background Firebase Anonymous Auth
-      await loginAnonymouslyStudent();
-      // Securely claim participant slot with anonymous UID
-      await dataService.claimParticipantSlot(roomCode, verified.participantCode, verified.englishNickname);
-    } catch (err) {
-      console.warn('Firebase anonymous auth offline fallback:', err);
-    } finally {
-      setIsAuthenticating(false);
-    }
-
-    dataService.logAuditAction(
-      'login', 
-      'room', 
-      verified.roomId, 
-      `Student verified and joined: ${verified.englishNickname} (${verified.participantCode})`,
-      'student'
-    );
-    onJoinSuccess(verified);
+    onJoinSuccess?.(verified);
   };
 
   return (
