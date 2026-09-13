@@ -20,9 +20,9 @@ class DataService {
   private getStorage<T>(key: string, fallback: T): T {
     try {
       const item = localStorage.getItem(key);
-      return item ? JSON.parse(item) : fallback;
+      return item ? JSON.parse(item) : JSON.parse(JSON.stringify(fallback));
     } catch {
-      return fallback;
+      return JSON.parse(JSON.stringify(fallback));
     }
   }
 
@@ -53,11 +53,10 @@ class DataService {
     return found || null;
   }
 
-  public verifyTeacherCode(code: string): 'Korea Class' | 'Taiwan Class' | 'admin' | null {
+  public verifyTeacherCode(code: string): 'Korea Class' | 'Taiwan Class' | null {
     const c = code.trim().toUpperCase();
     if (c === TEACHER_CODES.KOREA) return 'Korea Class';
     if (c === TEACHER_CODES.TAIWAN) return 'Taiwan Class';
-    if (c === TEACHER_CODES.ADMIN) return 'admin';
     return null;
   }
 
@@ -312,6 +311,14 @@ class DataService {
     };
   }
 
+  /**
+   * [DEV ONLY / INTERNAL]
+   * 개발 및 비상 테스트 전용 초기화 함수.
+   * 사용자 UI에는 절대 노출하지 않으며 관리자 화면 진입 시에도 절대 자동 호출되지 않습니다.
+   * 
+   * TODO: Firebase 연결 후에는 Google Authentication으로 로그인한 사용자 중
+   * 지정된 관리자 UID(예: adminUIDs.includes(currentUser.uid))만 관리자 권한을 획득하도록 구현 예정.
+   */
   public resetAllToDemo(): void {
     localStorage.removeItem(KEYS.ROOM);
     localStorage.removeItem(KEYS.ACTIVITIES);

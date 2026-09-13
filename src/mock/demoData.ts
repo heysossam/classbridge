@@ -4,8 +4,7 @@ export const ROOM_CODE = 'BRIDGE2026';
 
 export const TEACHER_CODES = {
   KOREA: 'K-TEACH-2026',
-  TAIWAN: 'T-TEACH-2026',
-  ADMIN: 'ADMIN-BRIDGE-2026'
+  TAIWAN: 'T-TEACH-2026'
 };
 
 export const initialRoom: Room = {

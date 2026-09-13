@@ -6,11 +6,13 @@ import { getTranslation } from '../../services/i18n';
 interface StartScreenProps {
   currentLang: Language;
   onSelectRole: (role: UserRole) => void;
+  onAdminClick?: () => void;
 }
 
 export const StartScreen: React.FC<StartScreenProps> = ({
   currentLang,
   onSelectRole,
+  onAdminClick,
 }) => {
   const t = (key: string) => getTranslation(currentLang, key);
 
@@ -208,7 +210,13 @@ export const StartScreen: React.FC<StartScreenProps> = ({
       {/* Admin Link at the very bottom */}
       <div style={{ textAlign: 'center', paddingBottom: '20px' }}>
         <button
-          onClick={() => onSelectRole('admin')}
+          onClick={() => {
+            if (onAdminClick) {
+              onAdminClick();
+            } else {
+              onSelectRole('admin');
+            }
+          }}
           style={{ 
             fontSize: '0.78rem', 
             color: 'var(--color-text-light)', 

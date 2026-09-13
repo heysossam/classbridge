@@ -8,6 +8,7 @@ import { UniversalActivityView } from './components/student/UniversalActivityVie
 import { TeacherLogin } from './components/teacher/TeacherLogin';
 import { TeacherDashboard } from './components/teacher/TeacherDashboard';
 import { AdminView } from './components/admin/AdminView';
+import { AdminRestrictedModal } from './components/common/AdminRestrictedModal';
 import { dataService } from './services/dataService';
 
 type AppView = 
@@ -22,10 +23,15 @@ type AppView =
 export default function App() {
   const searchParams = new URLSearchParams(window.location.search);
   const initialLang = (searchParams.get('lang') as Language) || 'ko';
-  const initialView = (searchParams.get('view') as AppView) || 'start';
+  
+  // Direct URL admin access attempt detection
+  const requestedViewParam = searchParams.get('view');
+  const isDirectAdminAccess = requestedViewParam === 'admin';
+  const initialView: AppView = isDirectAdminAccess ? 'start' : ((requestedViewParam as AppView) || 'start');
 
   const [currentLang, setCurrentLang] = useState<Language>(initialLang);
   const [currentView, setCurrentView] = useState<AppView>(initialView);
+  const [showAdminRestrictedModal, setShowAdminRestrictedModal] = useState<boolean>(isDirectAdminAccess);
 
   // Student Session
   const studentCodeParam = searchParams.get('code') || 'K7M4';
@@ -40,7 +46,25 @@ export default function App() {
   // Teacher Session State
   const [teacherSide, setTeacherSide] = useState<'Korea Class' | 'Taiwan Class'>('Korea Class');
 
-  // Sync initial view when direct URL params are used
+  // Handle direct URL admin attempt cleanup
+  useEffect(() => {
+    if (isDirectAdminAccess) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('view');
+      window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
+    }
+  }, [isDirectAdminAccess]);
+
+  // Route guard: Prevent any unauthorized access to admin screen
+  // TODO: Firebase 연결 후에는 Google Authentication으로 로그인한 사용자 중 지정된 관리자 UID만 관리자 화면에 접근하도록 인가 로직 연동
+  useEffect(() => {
+    if (currentView === 'admin') {
+      setCurrentView('start');
+      setShowAdminRestrictedModal(true);
+    }
+  }, [currentView]);
+
+  // Sync initial view when direct student URL params are used
   useEffect(() => {
     if ((initialView as string) === 'student_activity' || initialView === 'student_activity_detail') {
       setCurrentView('student_activity_detail');
@@ -60,7 +84,8 @@ export default function App() {
     } else if (role === 'teacher') {
       setCurrentView('teacher_login');
     } else if (role === 'admin') {
-      setCurrentView('admin');
+      // Direct admin role selection is blocked before Firebase Google Auth
+      setShowAdminRestrictedModal(true);
     }
   };
 
@@ -74,13 +99,9 @@ export default function App() {
     setCurrentView('student_activity_detail');
   };
 
-  const handleTeacherLoginSuccess = (side: 'Korea Class' | 'Taiwan Class', role?: 'teacher' | 'admin') => {
-    if (role === 'admin') {
-      setCurrentView('admin');
-    } else {
-      setTeacherSide(side);
-      setCurrentView('teacher_dashboard');
-    }
+  const handleTeacherLoginSuccess = (side: 'Korea Class' | 'Taiwan Class') => {
+    setTeacherSide(side);
+    setCurrentView('teacher_dashboard');
   };
 
   const handleExitToStart = () => {
@@ -101,6 +122,7 @@ export default function App() {
           <StartScreen
             currentLang={currentLang}
             onSelectRole={handleSelectRole}
+            onAdminClick={() => setShowAdminRestrictedModal(true)}
           />
         )}
 
@@ -147,6 +169,7 @@ export default function App() {
           />
         )}
 
+        {/* AdminView is rendered only if authorized (currently blocked) */}
         {currentView === 'admin' && (
           <AdminView
             currentLang={currentLang}
@@ -154,6 +177,13 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Admin Access Restriction Notice Modal */}
+      <AdminRestrictedModal
+        isOpen={showAdminRestrictedModal}
+        onClose={() => setShowAdminRestrictedModal(false)}
+        currentLang={currentLang}
+      />
     </div>
   );
 }

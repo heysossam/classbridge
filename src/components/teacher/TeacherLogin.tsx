@@ -7,7 +7,7 @@ import { TEACHER_CODES } from '../../mock/demoData';
 
 interface TeacherLoginProps {
   currentLang: Language;
-  onLoginSuccess: (side: 'Korea Class' | 'Taiwan Class', role?: 'teacher' | 'admin') => void;
+  onLoginSuccess: (side: 'Korea Class' | 'Taiwan Class') => void;
   onBack: () => void;
 }
 
@@ -36,11 +36,7 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({
       return;
     }
 
-    if (verified === 'admin') {
-      onLoginSuccess('Korea Class', 'admin');
-    } else {
-      onLoginSuccess(verified, 'teacher');
-    }
+    onLoginSuccess(verified);
   };
 
   return (

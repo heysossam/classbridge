@@ -1,9 +1,16 @@
 import React, { useState } from 'react';
-import { Shield, ArrowLeft, RefreshCw, Power, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Shield, ArrowLeft, Power, Lock } from 'lucide-react';
 import { Language, Room } from '../../types';
 import { getTranslation } from '../../services/i18n';
 import { dataService } from '../../services/dataService';
 
+/**
+ * TODO: Firebase 연동 후 서비스 관리자 접근 제어
+ * - Firebase Google Authentication 연동 후, 지정된 관리자 UID(예: adminUIDs.includes(currentUser.uid))만
+ *   관리자 화면에 접근할 수 있도록 인가(Authorization) 가드를 활성화할 예정입니다.
+ * - 본 컴포넌트는 마운트 시 어떠한 데이터(학생 제출, 교사 활동, 메모 등)도 생성, 수정, 삭제, 초기화하지 않습니다.
+ * - 본 MVP에서는 의도치 않은 데이터 유실을 방지하기 위해 데이터 초기화(reset) 버튼이 UI에서 완전히 제거되었습니다.
+ */
 interface AdminViewProps {
   currentLang: Language;
   onBack: () => void;
@@ -11,18 +18,9 @@ interface AdminViewProps {
 
 export const AdminView: React.FC<AdminViewProps> = ({ currentLang, onBack }) => {
   const t = (key: string) => getTranslation(currentLang, key);
-  const [room, setRoom] = useState<Room>(dataService.getRoom());
+  // Pure read-only state initialization on mount - no data modification
+  const [room] = useState<Room>(() => dataService.getRoom());
   const [isActive, setIsActive] = useState<boolean>(true);
-  const [resetMessage, setResetMessage] = useState<string>('');
-
-  const handleResetData = () => {
-    if (window.confirm(t('admin.resetConfirm'))) {
-      dataService.resetAllToDemo();
-      setResetMessage(currentLang === 'ko' ? '데모 데이터가 기본값으로 초기화되었습니다.' : 'Demo data reset successfully.');
-      setRoom(dataService.getRoom());
-      setTimeout(() => setResetMessage(''), 3000);
-    }
-  };
 
   return (
     <div style={{ maxWidth: '800px', margin: '20px auto' }}>
@@ -47,14 +45,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ currentLang, onBack }) => 
           {t('admin.notice')}
         </p>
 
-        {resetMessage && (
-          <div style={{ background: 'var(--color-success-soft)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', color: 'var(--color-success)', fontSize: '0.88rem', fontWeight: 600, marginBottom: '16px' }}>
-            {resetMessage}
-          </div>
-        )}
-
         {/* Room Management Section */}
-        <div style={{ marginBottom: '32px' }}>
+        <div style={{ marginBottom: '24px' }}>
           <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '12px' }}>
             {t('admin.roomList')}
           </h3>
@@ -90,22 +82,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ currentLang, onBack }) => 
           </div>
         </div>
 
-        {/* Data Reset Section */}
-        <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: '20px' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '8px' }}>
-            {t('admin.resetDemo')}
-          </h3>
-          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '14px' }}>
-            시연 도중 학생이 제출한 응답, 새로 작성된 메모 등을 초기 데모 상태로 깨끗이 되돌립니다.
-          </p>
-          <button
-            onClick={handleResetData}
-            className="btn-accent"
-            style={{ padding: '8px 16px', fontSize: '0.88rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-          >
-            <RefreshCw size={15} />
-            <span>{t('admin.resetDemo')}</span>
-          </button>
+        {/* Safe Mode Data Protection Notice */}
+        <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: '18px', fontSize: '0.82rem', color: 'var(--color-text-light)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Lock size={16} color="var(--color-primary)" />
+          <span>안전한 데이터 보호를 위해 클라이언트 데이터 리셋 기능은 비활성화되었습니다. 모든 학생 제출물 및 교사 메모는 안전하게 보존됩니다.</span>
         </div>
       </div>
     </div>
