@@ -1,5 +1,5 @@
 import React from 'react';
-import { GraduationCap, Users, ShieldAlert, Sparkles, ArrowRight, BookOpen, Layers } from 'lucide-react';
+import { GraduationCap, Users, ShieldAlert, Sparkles, ArrowRight, BookOpen, Layers, Eye } from 'lucide-react';
 import { Language, UserRole } from '../../types';
 import { getTranslation } from '../../services/i18n';
 
@@ -7,12 +7,14 @@ interface StartScreenProps {
   currentLang: Language;
   onSelectRole: (role: UserRole) => void;
   onAdminClick?: () => void;
+  onReviewerClick?: () => void;
 }
 
 export const StartScreen: React.FC<StartScreenProps> = ({
   currentLang,
   onSelectRole,
   onAdminClick,
+  onReviewerClick,
 }) => {
   const t = (key: string) => getTranslation(currentLang, key);
 
@@ -170,6 +172,63 @@ export const StartScreen: React.FC<StartScreenProps> = ({
             <ArrowRight size={18} />
           </button>
         </div>
+      </div>
+
+      {/* Reviewer Demo Mode Card (Requirement 3: 로그인 없는 평가자 체험 버튼) */}
+      <div 
+        className="cb-card hoverable" 
+        onClick={onReviewerClick}
+        style={{ 
+          cursor: 'pointer', 
+          border: '1.5px dashed var(--color-secondary)',
+          background: 'linear-gradient(135deg, rgba(79, 124, 172, 0.06) 0%, rgba(242, 140, 120, 0.06) 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '16px',
+          padding: '16px 20px',
+          marginBottom: '32px',
+          borderRadius: 'var(--radius-md)',
+          boxShadow: 'var(--shadow-sm)'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{
+            width: '46px',
+            height: '46px',
+            borderRadius: 'var(--radius-sm)',
+            background: 'var(--color-secondary-light)',
+            color: 'var(--color-secondary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <Eye size={24} />
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--color-primary)', margin: 0 }}>
+                {currentLang === 'ko' ? '평가자 체험' : currentLang === 'zh-TW' ? '評審體驗' : 'Evaluator Demo'}
+              </h3>
+              <span className="badge badge-accent" style={{ fontSize: '0.72rem' }}>
+                {currentLang === 'ko' ? '로그인 불필요 · 읽기 전용' : currentLang === 'zh-TW' ? '免登入 · 唯讀體驗' : 'No Login Required · Read-Only'}
+              </span>
+            </div>
+            <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--color-text-muted)' }}>
+              {currentLang === 'ko' ? '가상 데이터로 교사 대시보드의 주요 기능을 안전하게 살펴봅니다.' : currentLang === 'zh-TW' ? '使用虛擬數據安全預覽教師儀表板主要功能。' : 'Explore key features of the teacher dashboard safely with simulated data.'}
+            </p>
+          </div>
+        </div>
+        <button 
+          type="button"
+          className="btn-outline"
+          style={{ padding: '8px 18px', fontWeight: 700, borderColor: 'var(--color-secondary)', color: 'var(--color-secondary)', background: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}
+        >
+          <span>{currentLang === 'ko' ? '체험 시작' : currentLang === 'zh-TW' ? '開始體驗' : 'Start Demo'}</span>
+          <ArrowRight size={16} />
+        </button>
       </div>
 
       {/* Bottom Features & Privacy Notice */}

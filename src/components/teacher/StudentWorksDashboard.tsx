@@ -18,6 +18,7 @@ interface StudentWorksDashboardProps {
   activities: Activity[];
   students: StudentMembership[];
   onRefreshNeeded?: () => void;
+  isReviewerMode?: boolean;
 }
 
 export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
@@ -25,6 +26,7 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
   activities,
   students,
   onRefreshNeeded,
+  isReviewerMode = false,
 }) => {
   const t = (key: string) => getTranslation(currentLang, key);
 
@@ -735,41 +737,57 @@ export const StudentWorksDashboard: React.FC<StudentWorksDashboardProps> = ({
             </div>
           )}
 
-          {/* Teacher Observation Note & Overall Assessment for Selected Student */}
+          {/* Teacher Observation Note & Overall Assessment for Selected Student (Requirement 3: 평가자 체험 모드에서는 비공개) */}
           {selectedStudent && (
-            <div className="cb-card" style={{ borderTop: '4px solid var(--color-primary)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                <Lock size={18} color="var(--color-secondary)" />
-                <h4 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)' }}>
-                  {selectedStudent.englishNickname} 학생 전용 교사 비공개 관찰 메모
-                </h4>
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                  {t('teacher.privateNoteHidden')}
-                </span>
-              </div>
+            <div className="cb-card" style={{ borderTop: isReviewerMode ? '4px solid var(--color-border)' : '4px solid var(--color-primary)' }}>
+              {isReviewerMode ? (
+                <div style={{ padding: '8px 0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <Lock size={18} color="var(--color-text-muted)" />
+                    <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--color-text-muted)', margin: 0 }}>
+                      교사 비공개 관찰 메모 (평가자 체험 모드 열람 제한)
+                    </h4>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--color-text-light)' }}>
+                    보안 및 개인정보 보호 원칙에 따라 평가자 체험 모드에서는 비공개 교사 관찰 메모가 비공개 처리됩니다.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                    <Lock size={18} color="var(--color-secondary)" />
+                    <h4 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)' }}>
+                      {selectedStudent.englishNickname} 학생 전용 교사 비공개 관찰 메모
+                    </h4>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                      {t('teacher.privateNoteHidden')}
+                    </span>
+                  </div>
 
-              <textarea
-                rows={3}
-                value={portfolioNotes[selectedStudent.id] || ''}
-                onChange={(e) => setPortfolioNotes({ ...portfolioNotes, [selectedStudent.id]: e.target.value })}
-                placeholder="학생의 포트폴리오를 종합 검토하고 수업 관찰 기록을 작성하세요..."
-                style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.9rem', marginBottom: '8px' }}
-              />
+                  <textarea
+                    rows={3}
+                    value={portfolioNotes[selectedStudent.id] || ''}
+                    onChange={(e) => setPortfolioNotes({ ...portfolioNotes, [selectedStudent.id]: e.target.value })}
+                    placeholder="학생의 포트폴리오를 종합 검토하고 수업 관찰 기록을 작성하세요..."
+                    style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.9rem', marginBottom: '8px' }}
+                  />
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px' }}>
-                {portfolioNoteSaved[selectedStudent.id] && (
-                  <span style={{ fontSize: '0.82rem', color: 'var(--color-success)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Check size={15} /> {t('teacher.noteSaved')}
-                  </span>
-                )}
-                <button
-                  onClick={() => handleSavePortfolioNote(selectedStudent.id, portfolioNotes[selectedStudent.id] || '')}
-                  className="btn-primary"
-                  style={{ padding: '6px 16px', fontSize: '0.85rem' }}
-                >
-                  {t('teacher.saveNote')}
-                </button>
-              </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px' }}>
+                    {portfolioNoteSaved[selectedStudent.id] && (
+                      <span style={{ fontSize: '0.82rem', color: 'var(--color-success)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Check size={15} /> {t('teacher.noteSaved')}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => handleSavePortfolioNote(selectedStudent.id, portfolioNotes[selectedStudent.id] || '')}
+                      className="btn-primary"
+                      style={{ padding: '6px 16px', fontSize: '0.85rem' }}
+                    >
+                      {t('teacher.saveNote')}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

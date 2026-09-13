@@ -83,8 +83,9 @@ export async function checkAuthorizedUser(uid: string): Promise<{
 
     if (userDocSnap.exists()) {
       const data = userDocSnap.data();
-      // Requirement A: Must verify active === true
-      if (data.active === true && (data.role === 'teacher' || data.role === 'admin')) {
+      // Requirement A & 4: Must verify active === true (support both boolean true and string 'true')
+      const isActive = data.active === true || data.active === 'true';
+      if (isActive && (data.role === 'teacher' || data.role === 'admin')) {
         return {
           isAuthorized: true,
           role: data.role,

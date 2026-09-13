@@ -10,6 +10,7 @@ import { TeacherDashboard } from './components/teacher/TeacherDashboard';
 import { AdminView } from './components/admin/AdminView';
 import { AdminRestrictedModal } from './components/common/AdminRestrictedModal';
 import { dataService } from './services/dataService';
+import { logoutFirebaseUser } from './firebase';
 
 type AppView = 
   | 'start' 
@@ -49,15 +50,18 @@ export default function App() {
   const [showAdminRestrictedModal, setShowAdminRestrictedModal] = useState<boolean>(isDirectAdminAccess);
   const [isTeacherAuthenticated, setIsTeacherAuthenticated] = useState<boolean>(isTeacherSavedAuth);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
+  const [isReviewerMode, setIsReviewerMode] = useState<boolean>(false);
 
-  // Student Session
-  const studentCodeParam = searchParams.get('code') || 'K7M4';
-  const initialStudent = dataService.getStudents().find(s => s.participantCode.toUpperCase() === studentCodeParam.toUpperCase()) || dataService.getStudents()[0];
+  // Student Session: Only restore if explicit code parameter is provided
+  const studentCodeParam = searchParams.get('code');
+  const initialStudent = studentCodeParam 
+    ? dataService.getStudents().find(s => s.participantCode.toUpperCase() === studentCodeParam.toUpperCase()) || null
+    : null;
   const [studentSession, setStudentSession] = useState<StudentMembership | null>(initialStudent);
 
-  // Selected Activity for Student View
-  const actIdParam = searchParams.get('act') || 'act-01';
-  const initialAct = dataService.getActivityById(actIdParam) || dataService.getActivities()[0];
+  // Selected Activity for Student View: Only restore if explicit act parameter is provided
+  const actIdParam = searchParams.get('act');
+  const initialAct = actIdParam ? dataService.getActivityById(actIdParam) || null : null;
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(initialAct);
 
   // Teacher Session State
@@ -145,17 +149,51 @@ export default function App() {
   };
 
   const handleTeacherLoginSuccess = (side: 'Korea Class' | 'Taiwan Class') => {
+    setIsReviewerMode(false);
     setIsTeacherAuthenticated(true);
     setTeacherSide(side);
     sessionStorage.setItem('cb_teacher_side', side);
     setCurrentView('teacher_dashboard');
   };
 
-  const handleExitToStart = () => {
+  // Requirement 3: 안전한 평가자 체험 모드 진입
+  const handleEnterReviewerMode = () => {
+    setIsReviewerMode(true);
+    setIsTeacherAuthenticated(true);
+    setTeacherSide('Korea Class');
+    setCurrentView('teacher_dashboard');
+  };
+
+  // Requirement 2: 모든 화면의 나가기 버튼 정상화 및 공통 초기화 함수
+  const handleGlobalExit = async () => {
+    // 1. React 상태 초기화
     setIsTeacherAuthenticated(false);
     setIsAdminAuthenticated(false);
-    sessionStorage.removeItem('cb_teacher_side');
+    setIsReviewerMode(false);
+    setStudentSession(null);
+    setSelectedActivity(null);
+    setShowAdminRestrictedModal(false);
     setCurrentView('start');
+
+    // 2. sessionStorage의 현재 화면 및 역할 상태 제거
+    sessionStorage.removeItem('cb_teacher_side');
+    sessionStorage.clear();
+
+    // 3. URL의 view, code, act, modal 등 화면 복원용 query parameter 제거
+    const url = new URL(window.location.href);
+    url.searchParams.delete('view');
+    url.searchParams.delete('code');
+    url.searchParams.delete('act');
+    url.searchParams.delete('modal');
+    const cleanUrl = url.pathname + (url.searchParams.get('lang') ? `?lang=${url.searchParams.get('lang')}` : '');
+    window.history.replaceState({}, document.title, cleanUrl);
+
+    // 4. 학생 익명 세션 또는 Google 세션이 있으면 적절히 signOut
+    try {
+      await logoutFirebaseUser();
+    } catch (e) {
+      console.warn('Firebase sign out notice on exit:', e);
+    }
   };
 
   return (
@@ -164,7 +202,7 @@ export default function App() {
         currentLang={currentLang}
         onSelectLang={setCurrentLang}
         currentRole={currentRole}
-        onExitRole={handleExitToStart}
+        onExitRole={handleGlobalExit}
       />
 
       <main className="main-content">
@@ -173,6 +211,7 @@ export default function App() {
             currentLang={currentLang}
             onSelectRole={handleSelectRole}
             onAdminClick={() => setShowAdminRestrictedModal(true)}
+            onReviewerClick={handleEnterReviewerMode}
           />
         )}
 
@@ -180,7 +219,7 @@ export default function App() {
           <StudentJoin
             currentLang={currentLang}
             onJoinSuccess={handleStudentJoinSuccess}
-            onBack={handleExitToStart}
+            onBack={handleGlobalExit}
           />
         )}
 
@@ -189,7 +228,7 @@ export default function App() {
             currentLang={currentLang}
             student={studentSession}
             onSelectActivity={handleSelectStudentActivity}
-            onBack={() => setCurrentView('student_join')}
+            onBack={handleGlobalExit}
           />
         )}
 
@@ -206,7 +245,8 @@ export default function App() {
           <TeacherLogin
             currentLang={currentLang}
             onLoginSuccess={handleTeacherLoginSuccess}
-            onBack={handleExitToStart}
+            onBack={handleGlobalExit}
+            onEnterReviewerMode={handleEnterReviewerMode}
           />
         )}
 
@@ -215,7 +255,8 @@ export default function App() {
             currentLang={currentLang}
             teacherSide={teacherSide}
             onSwitchTeacherSide={setTeacherSide}
-            onBack={handleExitToStart}
+            onBack={handleGlobalExit}
+            isReviewerMode={isReviewerMode}
           />
         )}
 
@@ -223,7 +264,7 @@ export default function App() {
         {currentView === 'admin' && (
           <AdminView
             currentLang={currentLang}
-            onBack={handleExitToStart}
+            onBack={handleGlobalExit}
           />
         )}
       </main>

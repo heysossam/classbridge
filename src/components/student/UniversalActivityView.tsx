@@ -6,6 +6,13 @@ import {
 import { Language, StudentMembership, Activity, Submission, Comment } from '../../types';
 import { getTranslation, getLocalizedActivityContent } from '../../services/i18n';
 import { dataService } from '../../services/dataService';
+import { 
+  WritingLanguage, 
+  countWritingContent, 
+  formatContentCountDisplay, 
+  getRecommendedLimits, 
+  getUnitLabel 
+} from '../../services/textCounter';
 
 interface UniversalActivityViewProps {
   currentLang: Language;
@@ -29,6 +36,9 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
   // Form State
   const [postTitle, setPostTitle] = useState('');
   const [postContent, setPostContent] = useState('');
+  const [writingLang, setWritingLang] = useState<WritingLanguage>(
+    student.partnerSide === 'Taiwan Class' ? 'zh-TW' : 'ko'
+  );
   const [translationEn, setTranslationEn] = useState('');
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [selectedFrame, setSelectedFrame] = useState<string>('');
@@ -116,13 +126,18 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
         setFormError(currentLang === 'ko' ? '내용을 작성해 주세요.' : 'Please enter content.');
         return;
       }
-      const wordCount = postContent.trim().split(/\s+/).length;
-      if (activity.minWordCount && wordCount < activity.minWordCount) {
-        setFormError(`최소 ${activity.minWordCount}단어 이상 작성해 주세요. (현재: ${wordCount}단어)`);
+
+      // Requirement 1: 언어별 분량 계산 (본문만 계산, 제목·번역문 제외)
+      const currentCount = countWritingContent(postContent, writingLang);
+      const { min: recMin, max: recMax } = getRecommendedLimits(writingLang, activity.minWordCount, activity.maxWordCount);
+      const unit = getUnitLabel(writingLang);
+
+      if (activity.minWordCount && currentCount < recMin) {
+        setFormError(`최소 ${recMin}${unit} 이상 작성해 주세요. (현재: ${currentCount}${unit})`);
         return;
       }
-      if (activity.maxWordCount && wordCount > activity.maxWordCount) {
-        setFormError(`최대 ${activity.maxWordCount}단어 이하로 작성해 주세요. (현재: ${wordCount}단어)`);
+      if (activity.maxWordCount && currentCount > recMax) {
+        setFormError(`최대 ${recMax}${unit} 이하로 작성해 주세요. (현재: ${currentCount}${unit})`);
         return;
       }
     }
@@ -138,7 +153,7 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
       content: postContent.trim(),
       translationEn: translationEn.trim() || undefined,
       selectedOptions: activity.type === 'poll' ? selectedOptions : undefined,
-      language: 'en'
+      language: writingLang
     });
 
     setPostTitle('');
@@ -370,23 +385,67 @@ export const UniversalActivityView: React.FC<UniversalActivityViewProps> = ({
               </div>
             )}
 
+            {/* Writing Language Selector (Requirement 1: UI 언어와 학생 작성 언어 분리) */}
+            <div style={{ marginBottom: '14px', background: 'var(--bg-subtle)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                  {currentLang === 'ko' ? '작성 언어' : currentLang === 'zh-TW' ? '書寫語言' : 'Writing Language'}
+                </span>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {(['en', 'ko', 'zh-TW'] as WritingLanguage[]).map((lang) => {
+                    const isSelected = writingLang === lang;
+                    const label = lang === 'en' ? 'English' : lang === 'ko' ? '한국어' : '繁體中文';
+                    return (
+                      <button
+                        key={lang}
+                        type="button"
+                        onClick={() => setWritingLang(lang)}
+                        style={{
+                          padding: '5px 12px',
+                          fontSize: '0.82rem',
+                          fontWeight: isSelected ? 700 : 500,
+                          borderRadius: 'var(--radius-xs)',
+                          border: isSelected ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
+                          background: isSelected ? 'var(--color-primary)' : '#fff',
+                          color: isSelected ? '#fff' : 'var(--color-text)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
             {/* Content Textarea */}
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
                 <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text)' }}>
-                  {activity.type === 'poll' ? (currentLang === 'ko' ? '선택 이유 (영어로 작성 권장)' : 'Reason') : (currentLang === 'ko' ? '본문 (원하는 언어로 자유롭게 작성)' : 'Content')}
+                  {activity.type === 'poll' ? (currentLang === 'ko' ? '선택 이유 (작성 언어)' : 'Reason') : (currentLang === 'ko' ? '본문' : 'Content')}
                 </label>
-                {activity.minWordCount > 0 && (
-                  <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
-                    권장 단어 수: {activity.minWordCount}~{activity.maxWordCount}단어 (현재: {postContent.trim() ? postContent.trim().split(/\s+/).length : 0}단어)
-                  </span>
-                )}
+                {/* 언어별 분량 표기 (본문만 계산, 권장 분량 고정) */}
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-primary)' }}>
+                  {formatContentCountDisplay(
+                    countWritingContent(postContent, writingLang),
+                    writingLang,
+                    currentLang,
+                    activity.minWordCount,
+                    activity.maxWordCount
+                  )}
+                </span>
               </div>
               <textarea
                 value={postContent}
                 onChange={(e) => setPostContent(e.target.value)}
                 rows={4}
-                placeholder={currentLang === 'ko' ? '내용을 작성하세요. 문장 틀 칩을 누르면 자동으로 추가됩니다.' : 'Write your response here...'}
+                placeholder={
+                  writingLang === 'en' ? 'Write in English...' :
+                  writingLang === 'zh-TW' ? '請用繁體中文書寫...' :
+                  '한국어로 작성하세요. 문장 틀 칩을 누르면 자동으로 추가됩니다.'
+                }
                 style={{ width: '100%', padding: '12px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.95rem', lineHeight: 1.5 }}
               />
             </div>

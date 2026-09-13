@@ -17,6 +17,7 @@ interface TeacherDashboardProps {
   teacherSide: 'Korea Class' | 'Taiwan Class';
   onSwitchTeacherSide: (side: 'Korea Class' | 'Taiwan Class') => void;
   onBack: () => void;
+  isReviewerMode?: boolean;
 }
 
 type TeacherTab = 'timeline' | 'works' | 'assessment' | 'archived';
@@ -26,6 +27,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   teacherSide,
   onSwitchTeacherSide,
   onBack,
+  isReviewerMode = false,
 }) => {
   const t = (key: string) => getTranslation(currentLang, key);
 
@@ -67,29 +69,49 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     setRoom({ ...updated });
   };
 
-  // Activity Actions
+  // Activity Actions (Protected in Reviewer Mode)
   const handleDuplicate = (id: string) => {
+    if (isReviewerMode) {
+      alert(currentLang === 'ko' ? '평가자 체험 모드에서는 활동 복제 기능이 비활성화됩니다.' : 'Duplicate is disabled in reviewer demo mode.');
+      return;
+    }
     dataService.duplicateActivity(id);
     reloadActivities();
   };
 
   const handleToggleStatus = (act: Activity) => {
+    if (isReviewerMode) {
+      alert(currentLang === 'ko' ? '평가자 체험 모드에서는 활동 상태 변경이 비활성화됩니다.' : 'Status change is disabled in reviewer demo mode.');
+      return;
+    }
     const next = act.status === 'published' ? 'closed' : act.status === 'closed' ? 'published' : 'published';
     dataService.updateActivityStatus(act.id, next);
     reloadActivities();
   };
 
   const handleArchive = (id: string) => {
+    if (isReviewerMode) {
+      alert(currentLang === 'ko' ? '평가자 체험 모드에서는 보관 기능이 비활성화됩니다.' : 'Archive is disabled in reviewer demo mode.');
+      return;
+    }
     dataService.archiveActivity(id);
     reloadActivities();
   };
 
   const handleRestore = (id: string) => {
+    if (isReviewerMode) {
+      alert(currentLang === 'ko' ? '평가자 체험 모드에서는 복원 기능이 비활성화됩니다.' : 'Restore is disabled in reviewer demo mode.');
+      return;
+    }
     dataService.restoreActivity(id);
     reloadActivities();
   };
 
   const handleDeleteAttempt = (act: Activity) => {
+    if (isReviewerMode) {
+      alert(currentLang === 'ko' ? '평가자 체험 모드에서는 활동 삭제가 비활성화됩니다.' : 'Delete is disabled in reviewer demo mode.');
+      return;
+    }
     const check = dataService.canDeleteActivity(act.id);
     if (!check.canDelete) {
       setDeleteNoticeMessage(t('activity.cannotDeleteNotice'));
@@ -109,6 +131,37 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+      {/* Requirement 3: Reviewer Demo Mode Top Banner */}
+      {isReviewerMode && (
+        <div style={{
+          background: 'linear-gradient(90deg, #EFF6FF 0%, #F0FDF4 100%)',
+          border: '1.5px solid #3B82F6',
+          borderRadius: 'var(--radius-md)',
+          padding: '12px 18px',
+          marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+          boxShadow: 'var(--shadow-sm)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span className="badge" style={{ background: '#2563EB', color: '#fff', fontSize: '0.8rem', padding: '4px 10px', fontWeight: 700 }}>
+              평가자 체험 모드 · 가상 데이터
+            </span>
+            <span style={{ fontSize: '0.88rem', color: '#1E40AF', fontWeight: 500 }}>
+              {currentLang === 'ko'
+                ? '가상 데이터를 활용한 읽기 전용 평가 환경입니다. 실제 학생 데이터 및 비공개 메모는 격리되어 보호됩니다.'
+                : 'Read-only evaluation environment with mock data. Real student data and private notes are safely isolated.'}
+            </span>
+          </div>
+          <span style={{ fontSize: '0.78rem', color: '#4B5563', background: '#fff', padding: '4px 8px', borderRadius: 'var(--radius-xs)', border: '1px solid #DBEAFE', fontWeight: 600 }}>
+            {currentLang === 'ko' ? 'Firebase 쓰기 차단됨 · 종료 시 초기화' : 'Firebase Writes Blocked · Reset on Exit'}
+          </span>
+        </div>
+      )}
+
       {/* Top Controls Bar */}
       <div style={{ 
         display: 'flex', 
@@ -137,10 +190,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
-            onClick={() => dataService.exportRoomDataAsJSON(room.id)}
+            onClick={() => {
+              if (isReviewerMode) {
+                alert(currentLang === 'ko' ? '평가자 체험 모드에서는 데이터 내보내기가 비활성화됩니다.' : 'Data export is disabled in reviewer demo mode.');
+                return;
+              }
+              dataService.exportRoomDataAsJSON(room.id);
+            }}
             className="btn-outline"
-            title="활동, 과제물, 댓글, 투표 결과를 비식별화된 JSON 파일로 백업합니다."
-            style={{ padding: '8px 12px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+            title={isReviewerMode ? '평가자 체험 모드에서는 내보내기가 비활성화됩니다.' : '활동, 과제물, 댓글, 투표 결과를 비식별화된 JSON 파일로 백업합니다.'}
+            style={{ padding: '8px 12px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px', opacity: isReviewerMode ? 0.6 : 1 }}
           >
             <Download size={15} />
             <span>{currentLang === 'ko' ? '교류방 기록 내보내기' : currentLang === 'zh-TW' ? '匯出交流室紀錄' : 'Export Room Data'}</span>
@@ -444,6 +503,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           activities={activities}
           students={students}
           onRefreshNeeded={reloadActivities}
+          isReviewerMode={isReviewerMode}
         />
       )}
 
@@ -647,6 +707,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           currentLang={currentLang}
           student={selectedStudent}
           onClose={() => setSelectedStudent(null)}
+          isReviewerMode={isReviewerMode}
         />
       )}
 

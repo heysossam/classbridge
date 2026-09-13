@@ -12,12 +12,14 @@ interface StudentDetailModalProps {
   currentLang: Language;
   student: StudentMembership;
   onClose: () => void;
+  isReviewerMode?: boolean;
 }
 
 export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   currentLang,
   student,
   onClose,
+  isReviewerMode = false,
 }) => {
   const t = (key: string) => getTranslation(currentLang, key);
 
@@ -188,35 +190,47 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           </div>
         </div>
 
-        {/* Section 4: Teacher Confidential Note */}
-        <div style={{ marginBottom: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '6px' }}>
-            <Lock size={14} />
-            <span>교사 비공개 평가 메모 (학생 절대 비공개)</span>
+        {/* Section 4: Teacher Confidential Note (Requirement 3: 평가자 체험 모드에서는 비공개) */}
+        {isReviewerMode ? (
+          <div style={{ marginBottom: '20px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', padding: '12px 14px', border: '1px dashed var(--color-border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>
+              <Lock size={14} />
+              <span>교사 비공개 관찰 메모 (평가자 체험 모드 열람 제한)</span>
+            </div>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--color-text-light)' }}>
+              보안 및 개인정보 보호 원칙에 따라 평가자 체험 모드에서는 교사 비공개 관찰 메모가 비공개 처리됩니다.
+            </p>
           </div>
+        ) : (
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '6px' }}>
+              <Lock size={14} />
+              <span>교사 비공개 평가 메모 (학생 절대 비공개)</span>
+            </div>
 
-          <textarea
-            value={noteText}
-            onChange={(e) => setNoteText(e.target.value)}
-            placeholder="학생의 성실성, 협업 태도, 영어 언어 성장 등에 대한 교사만의 비공개 관찰 메모를 작성하세요..."
-            rows={2}
-            style={{
-              width: '100%',
-              padding: '8px 10px',
-              borderRadius: 'var(--radius-xs)',
-              border: '1px solid var(--color-border)',
-              fontSize: '0.85rem',
-              marginBottom: '6px'
-            }}
-          />
+            <textarea
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              placeholder="학생의 성실성, 협업 태도, 영어 언어 성장 등에 대한 교사만의 비공개 관찰 메모를 작성하세요..."
+              rows={2}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                borderRadius: 'var(--radius-xs)',
+                border: '1px solid var(--color-border)',
+                fontSize: '0.85rem',
+                marginBottom: '6px'
+              }}
+            />
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', alignItems: 'center' }}>
-            {noteSaved && <span style={{ fontSize: '0.78rem', color: 'var(--color-success)', fontWeight: 600 }}>저장되었습니다!</span>}
-            <button onClick={handleSaveNote} className="btn-secondary" style={{ padding: '4px 12px', fontSize: '0.8rem' }}>
-              메모 저장
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', alignItems: 'center' }}>
+              {noteSaved && <span style={{ fontSize: '0.78rem', color: 'var(--color-success)', fontWeight: 600 }}>저장되었습니다!</span>}
+              <button onClick={handleSaveNote} className="btn-secondary" style={{ padding: '4px 12px', fontSize: '0.8rem' }}>
+                메모 저장
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
           <button onClick={onClose} className="btn-outline" style={{ padding: '6px 18px' }}>닫기</button>

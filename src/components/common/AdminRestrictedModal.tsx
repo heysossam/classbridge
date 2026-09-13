@@ -36,8 +36,8 @@ export const AdminRestrictedModal: React.FC<AdminRestrictedModalProps> = ({
         await logoutFirebaseUser();
         setErrorMessage(
           currentLang === 'ko'
-            ? '관리자(admin) 권한이 부여된 Google 계정이 아닙니다. (Firestore authorizedUsers에 role: "admin"으로 등록되어야 합니다)'
-            : 'Access denied. Account does not have admin role in authorizedUsers.'
+            ? '관리자(admin) 권한이 부여된 Google 계정이 아닙니다. (Firestore authorizedUsers에 role: "admin", active: true로 등록된 계정만 입장 가능합니다. 평가자 체험 모드에서는 관리자 화면을 열람할 수 없습니다)'
+            : 'Access denied. Only registered accounts with role: "admin" and active: true can access the admin view.'
         );
         return;
       }
@@ -48,9 +48,13 @@ export const AdminRestrictedModal: React.FC<AdminRestrictedModalProps> = ({
     } catch (err: any) {
       console.warn('Admin Google login failed:', err);
       if (err.message === 'FIREBASE_NOT_CONFIGURED') {
-        setErrorMessage('Firebase 설정이 필요합니다. .env.local 설정을 확인하세요.');
-      } else if (err.code !== 'auth/popup-closed-by-user') {
-        setErrorMessage('Google 관리자 로그인에 실패했습니다.');
+        setErrorMessage(currentLang === 'ko' ? 'Firebase 설정이 필요합니다. .env.local 설정을 확인하세요.' : 'Firebase is not configured.');
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        setErrorMessage(currentLang === 'ko' ? '로그인 창이 닫혔습니다. 다시 시도해 주세요.' : 'Sign-in popup was closed.');
+      } else if (err.code === 'auth/network-request-failed') {
+        setErrorMessage(currentLang === 'ko' ? '네트워크 연결을 확인한 후 다시 시도해 주세요.' : 'Network error. Please check your connection.');
+      } else {
+        setErrorMessage(currentLang === 'ko' ? 'Google 관리자 로그인 처리 중 문제가 발생했습니다. 계정 권한을 확인해 주세요.' : 'Sign-in failed. Please verify your account authorization.');
       }
     } finally {
       setIsLoggingIn(false);

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   GraduationCap, ArrowRight, ShieldCheck, ArrowLeft, 
-  KeyRound, AlertCircle, CheckCircle2, UserCheck, LogIn, ShieldAlert 
+  KeyRound, AlertCircle, CheckCircle2, UserCheck, LogIn, ShieldAlert, Eye 
 } from 'lucide-react';
 import { Language } from '../../types';
 import { getTranslation } from '../../services/i18n';
@@ -13,17 +13,20 @@ interface TeacherLoginProps {
   currentLang: Language;
   onLoginSuccess: (side: 'Korea Class' | 'Taiwan Class') => void;
   onBack: () => void;
+  onEnterReviewerMode?: () => void;
 }
 
 export const TeacherLogin: React.FC<TeacherLoginProps> = ({
   currentLang,
   onLoginSuccess,
   onBack,
+  onEnterReviewerMode,
 }) => {
   const t = (key: string) => getTranslation(currentLang, key);
   const room = dataService.getRoom();
   const [authCode, setAuthCode] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [showReviewerInvitation, setShowReviewerInvitation] = useState<boolean>(false);
   const [isLoggingInGoogle, setIsLoggingInGoogle] = useState(false);
   const [googleUser, setGoogleUser] = useState<{ displayName: string | null; email: string | null; assignedSide?: 'Korea Class' | 'Taiwan Class' } | null>(null);
   const [selectedClassSide, setSelectedClassSide] = useState<'Korea Class' | 'Taiwan Class'>('Korea Class');
@@ -36,6 +39,7 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({
   // Google Authentication with strict authorizedUsers/{uid} verification
   const handleGoogleLogin = async () => {
     setErrorMessage('');
+    setShowReviewerInvitation(false);
     setIsLoggingInGoogle(true);
     try {
       const user = await loginWithGoogle();
@@ -46,11 +50,8 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({
       if (!authResult.isAuthorized || (authResult.role !== 'teacher' && authResult.role !== 'admin')) {
         // Automatically logout unauthorized user immediately
         await logoutFirebaseUser();
-        setErrorMessage(
-          currentLang === 'ko'
-            ? '등록 및 활성화(active)된 교사 계정이 아닙니다. (Firestore authorizedUsers에 등록된 계정만 입장 가능합니다)'
-            : 'Not an active authorized teacher account. Please contact the administrator.'
-        );
+        // Requirement 3-B: Show reviewer demo invitation instead of a harsh block
+        setShowReviewerInvitation(true);
         return;
       }
 
@@ -206,6 +207,36 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({
           }}>
             <AlertCircle size={18} style={{ flexShrink: 0 }} />
             <span>{errorMessage}</span>
+          </div>
+        )}
+
+        {/* Requirement 3-B: Reviewer Demo Invitation for Unregistered Google Users */}
+        {showReviewerInvitation && (
+          <div style={{
+            background: 'linear-gradient(135deg, #EFF6FF 0%, #F0FDF4 100%)',
+            border: '1.5px solid #3B82F6',
+            borderRadius: 'var(--radius-sm)',
+            padding: '16px',
+            marginBottom: '20px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1D4ED8', fontWeight: 700, marginBottom: '6px' }}>
+              <Eye size={20} />
+              <span>{currentLang === 'ko' ? '평가자 읽기 전용 체험 모드 안내' : 'Reviewer Read-Only Mode'}</span>
+            </div>
+            <p style={{ fontSize: '0.88rem', color: '#1E3A8A', lineHeight: 1.5, margin: '0 0 14px 0' }}>
+              {currentLang === 'ko'
+                ? '등록된 교사 계정은 아니지만, 평가를 위한 읽기 전용 체험 화면을 이용할 수 있습니다.'
+                : 'Your Google account is not registered as an official teacher, but you can explore the read-only preview mode for evaluation.'}
+            </p>
+            <button
+              type="button"
+              onClick={onEnterReviewerMode}
+              className="btn-primary"
+              style={{ width: '100%', padding: '10px 16px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: '#2563EB', borderColor: '#2563EB' }}
+            >
+              <span>{currentLang === 'ko' ? '평가자 체험하기' : 'Enter Reviewer Demo'}</span>
+              <ArrowRight size={16} />
+            </button>
           </div>
         )}
 
